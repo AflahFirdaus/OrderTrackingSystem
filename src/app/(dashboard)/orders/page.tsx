@@ -6,54 +6,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import Container from "@/components/container";
 import { ORDER_STATUSES, PLATFORMS } from "@/lib/constants";
-import type { OrderWithItems, User, PlatformPenjualan, OrderStatus } from "@/types/database";
+import type { OrderWithItems, User, OrderStatus } from "@/types/database";
 import { QRCodeSVG } from "qrcode.react";
 import { getQrUrl } from "@/lib/utils/qr-token";
 import { downloadReceipt } from "@/lib/utils/generate-receipt";
 import { SidebarForm } from "@/components/sidebar-form";
-import { DeleteConfirmModal } from "@/components/delete-confirm-modal";
-import { Plus, Search, Download, X, Edit, Trash2, Package, Users, DollarSign, ShoppingCart, FileText } from "lucide-react";
+import { Plus, Search, Download, X, FileText } from "lucide-react";
 
-export default function DashboardPage() {
+export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [showOrderForm, setShowOrderForm] = useState(false);
-  const [showUserForm, setShowUserForm] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [deleteModal, setDeleteModal] = useState<{
-    isOpen: boolean;
-    user: User | null;
-  }>({ isOpen: false, user: null });
-  const [deleting, setDeleting] = useState(false);
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    totalUsers: 0,
-    totalOrderItems: 0,
-    totalRevenue: 0,
-  });
 
   // Order form state
   const [orderForm, setOrderForm] = useState({
     order_id_marketplace: "",
     nama_pembeli: "",
-    platform_penjualan: "Shopee" as PlatformPenjualan,
+    platform_penjualan: "Shopee" as "Shopee" | "Tokopedia" | "Blibli",
     tanggal_pemesanan: new Date().toISOString().split("T")[0],
     total_harga: "",
     keterangan: "",
     expedisi: "",
     order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
-  });
-
-  // User form state
-  const [userForm, setUserForm] = useState({
-    nama: "",
-    username: "",
-    password: "",
-    role: "gudang" as "admin" | "gudang" | "packing",
   });
 
   useEffect(() => {
@@ -67,10 +44,11 @@ export default function DashboardPage() {
         const data = await res.json();
         if (data.user) {
           setCurrentUser(data.user);
-          // Only fetch data if authenticated
-          fetchOrders();
-          fetchUsers();
-          fetchStats();
+          if (data.user.role === "admin") {
+            fetchOrders();
+          } else {
+            window.location.href = "/";
+          }
         } else {
           window.location.href = "/login";
         }
@@ -81,25 +59,12 @@ export default function DashboardPage() {
     checkAuthAndFetch();
   }, []);
 
-  const fetchCurrentUser = async () => {
-    try {
-      const res = await fetch("/api/auth/me");
-      const data = await res.json();
-      if (data.user) {
-        setCurrentUser(data.user);
-      }
-    } catch (error) {
-      console.error("Error fetching user:", error);
-    }
-  };
-
   const fetchOrders = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/orders");
       const data = await res.json();
       
-      // Ensure data is always an array
       if (Array.isArray(data)) {
         setOrders(data);
       } else {
@@ -111,41 +76,6 @@ export default function DashboardPage() {
       setOrders([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch("/api/users");
-      const data = await res.json();
-      
-      // Ensure data is always an array
-      if (Array.isArray(data)) {
-        setUsers(data);
-      } else {
-        console.error("Invalid users data:", data);
-        setUsers([]);
-      }
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      setUsers([]);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const res = await fetch("/api/stats");
-      const data = await res.json();
-      if (data) {
-        setStats({
-          totalOrders: data.totalOrders || 0,
-          totalUsers: data.totalUsers || 0,
-          totalOrderItems: data.totalOrderItems || 0,
-          totalRevenue: data.totalRevenue || 0,
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
     }
   };
 
@@ -195,75 +125,10 @@ export default function DashboardPage() {
         order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
       });
       fetchOrders();
-      fetchStats();
     } catch (error: any) {
       alert(error.message || "Terjadi kesalahan");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateUser = async (e: React.FormEvent | null, formData?: any) => {
-    if (e) {
-      e.preventDefault();
-    }
-    setLoading(true);
-
-    try {
-      const dataToSubmit = formData || userForm;
-      const url = editingUser ? `/api/users/${editingUser.id}` : "/api/users";
-      const method = editingUser ? "PATCH" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dataToSubmit),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Gagal membuat user");
-      }
-
-      setShowUserForm(false);
-      setEditingUser(null);
-      setUserForm({
-        nama: "",
-        username: "",
-        password: "",
-        role: "gudang",
-      });
-      fetchUsers();
-      fetchStats();
-    } catch (error: any) {
-      alert(error.message || "Terjadi kesalahan");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteClick = (user: User) => {
-    setDeleteModal({ isOpen: true, user });
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteModal.user) return;
-
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/users/${deleteModal.user.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Gagal menghapus user");
-      }
-      setDeleteModal({ isOpen: false, user: null });
-      fetchUsers();
-      fetchStats();
-    } catch (error: any) {
-      alert(error.message || "Terjadi kesalahan");
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -310,68 +175,13 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">Dashboard Admin</h1>
-            <p className="text-muted-foreground">Kelola order dan user</p>
+            <h1 className="text-3xl font-bold">Orders</h1>
+            <p className="text-muted-foreground">Kelola semua order dari marketplace</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowOrderForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Tambah Order
-            </Button>
-            <Button onClick={() => setShowUserForm(true)} variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Tambah User
-            </Button>
-          </div>
-        </div>
-
-        {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Order</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalOrders}</div>
-              <p className="text-xs text-muted-foreground">Semua order</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total User</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-              <p className="text-xs text-muted-foreground">User terdaftar</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Item</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalOrderItems}</div>
-              <p className="text-xs text-muted-foreground">Item order</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                Rp {stats.totalRevenue.toLocaleString("id-ID")}
-              </div>
-              <p className="text-xs text-muted-foreground">Total keuntungan</p>
-            </CardContent>
-          </Card>
+          <Button onClick={() => setShowOrderForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Tambah Order
+          </Button>
         </div>
 
         {/* Orders Section */}
@@ -439,70 +249,6 @@ export default function DashboardPage() {
                           >
                             Detail
                           </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Users Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Daftar User</CardTitle>
-            <CardDescription>Kelola user sistem</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!Array.isArray(users) || users.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Belum ada user
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="p-2 text-left text-sm">Nama</th>
-                      <th className="p-2 text-left text-sm">Username</th>
-                      <th className="p-2 text-left text-sm">Role</th>
-                      <th className="p-2 text-left text-sm">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{user.nama}</td>
-                        <td className="p-2">{user.username}</td>
-                        <td className="p-2">{user.role}</td>
-                        <td className="p-2">
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingUser(user);
-                                setUserForm({
-                                  nama: user.nama,
-                                  username: user.username,
-                                  password: "",
-                                  role: user.role,
-                                });
-                                setShowUserForm(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteClick(user)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
                         </td>
                       </tr>
                     ))}
@@ -641,7 +387,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Sidebar Forms */}
+        {/* Sidebar Form */}
         <SidebarForm
           isOpen={showOrderForm}
           onClose={() => {
@@ -662,32 +408,6 @@ export default function DashboardPage() {
             await handleCreateOrder(null, data);
           }}
           loading={loading}
-        />
-
-        <SidebarForm
-          isOpen={showUserForm}
-          onClose={() => {
-            setShowUserForm(false);
-            setEditingUser(null);
-            setUserForm({ nama: "", username: "", password: "", role: "gudang" });
-          }}
-          type="user"
-          onSubmit={async (data) => {
-            await handleCreateUser(null, data);
-          }}
-          loading={loading}
-          initialData={editingUser ? { userForm } : undefined}
-        />
-
-        {/* Delete Confirm Modal */}
-        <DeleteConfirmModal
-          isOpen={deleteModal.isOpen}
-          onClose={() => setDeleteModal({ isOpen: false, user: null })}
-          onConfirm={handleDeleteConfirm}
-          title="Hapus User"
-          description="Apakah Anda yakin ingin menghapus user ini?"
-          itemName={deleteModal.user ? `${deleteModal.user.nama} (${deleteModal.user.username})` : undefined}
-          loading={deleting}
         />
       </div>
     </Container>

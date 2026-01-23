@@ -1,7 +1,7 @@
+import { TopNav } from "@/components/nav";
 import { SideNav } from "@/components/nav";
-import TopNavDynamic from "@/components/nav/top-nav-dynamic";
 
-export default function DashboardLayout({
+export default function ScanTokenLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -10,7 +10,7 @@ export default function DashboardLayout({
     <div className="flex min-h-[100dvh]">
       <SideNav />
       <div className="flex-grow overflow-auto">
-        <TopNavDynamic />
+        <TopNav title="Detail Order" />
         <main>{children}</main>
       </div>
     </div>

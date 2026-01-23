@@ -21,12 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn("bg-background font-sans", gabarito.variable)}>
-        <Providers>
-          <div className="flex min-h-[100dvh]">
-            <SideNav />
-            <div className="flex-grow overflow-auto">{children}</div>
-          </div>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
