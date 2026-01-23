@@ -157,7 +157,7 @@ async function generateQRCodeDataURL(url: string): Promise<string> {
             light: "#FFFFFF",
           },
         },
-        (err, dataUrl) => {
+        (err: Error | null, dataUrl: string) => {
           if (err) {
             reject(err);
           } else {

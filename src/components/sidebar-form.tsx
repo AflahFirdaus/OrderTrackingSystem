@@ -18,6 +18,24 @@ interface SidebarFormProps {
   initialData?: any;
 }
 
+interface OrderItem {
+  nama_produk?: string;
+  qty?: string;
+  harga_satuan?: string;
+}
+
+interface OrderForm {
+  order_id_marketplace: string;
+  nama_pembeli: string;
+  platform_penjualan: PlatformPenjualan;
+  tanggal_pemesanan: string;
+  total_harga: string;
+  ongkir: string;
+  keterangan: string;
+  expedisi: string;
+  order_items: OrderItem[];
+}
+
 export function SidebarForm({
   isOpen,
   onClose,
@@ -26,10 +44,10 @@ export function SidebarForm({
   loading = false,
   initialData,
 }: SidebarFormProps) {
-  const [orderForm, setOrderForm] = useState({
+  const [orderForm, setOrderForm] = useState<OrderForm>({
     order_id_marketplace: "",
     nama_pembeli: "",
-    platform_penjualan: "Shopee" as PlatformPenjualan,
+    platform_penjualan: "Shopee",
     tanggal_pemesanan: new Date().toISOString().split("T")[0],
     total_harga: "",
     ongkir: "",
@@ -38,6 +56,7 @@ export function SidebarForm({
     order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
     ...(initialData?.orderForm || {}),
   });
+
 
   const [userForm, setUserForm] = useState({
     nama: "",
@@ -50,15 +69,21 @@ export function SidebarForm({
   // Calculate subtotal from order_items
   const subtotalItems = useMemo(() => {
     if (type !== "order") return 0;
-    
+
     return orderForm.order_items
-      .filter((item) => item.nama_produk && item.qty && item.harga_satuan)
-      .reduce((total, item) => {
-        const qty = parseInt(item.qty) || 0;
-        const hargaSatuan = parseFloat(item.harga_satuan) || 0;
-        return total + (qty * hargaSatuan);
+      .filter(
+        (item: OrderItem) =>
+          item.nama_produk &&
+          item.qty &&
+          item.harga_satuan
+      )
+      .reduce((total: number, item: OrderItem) => {
+        const qty = parseInt(item.qty ?? "0", 10);
+        const hargaSatuan = parseFloat(item.harga_satuan ?? "0");
+        return total + qty * hargaSatuan;
       }, 0);
   }, [orderForm.order_items, type]);
+
 
   // Calculate total: subtotal + ongkir (if provided)
   const calculatedTotal = useMemo(() => {
@@ -74,7 +99,9 @@ export function SidebarForm({
     if (type === "order" && !isTotalManuallyEdited) {
       setOrderForm((prev) => ({
         ...prev,
-        total_harga: calculatedTotal > 0 ? calculatedTotal.toString() : "",
+        total_harga: calculatedTotal > 0
+          ? calculatedTotal.toString()
+          : "",
       }));
     }
   }, [calculatedTotal, type, isTotalManuallyEdited]);
@@ -85,10 +112,11 @@ export function SidebarForm({
       const orderItems = orderForm.order_items
         .filter((item) => item.nama_produk && item.qty && item.harga_satuan)
         .map((item) => ({
-          nama_produk: item.nama_produk,
-          qty: parseInt(item.qty),
-          harga_satuan: parseFloat(item.harga_satuan),
+          nama_produk: item.nama_produk!,
+          qty: parseInt(item.qty ?? "0", 10),
+          harga_satuan: parseFloat(item.harga_satuan ?? "0"),
         }));
+
 
       // Use manual total if edited, otherwise use calculated total
       const finalTotal = isTotalManuallyEdited && orderForm.total_harga
@@ -285,8 +313,9 @@ export function SidebarForm({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Item Order</label>
                   {orderForm.order_items.map((item, index) => {
-                    const qty = parseInt(item.qty) || 0;
-                    const hargaSatuan = parseFloat(item.harga_satuan) || 0;
+                    const qty = parseInt(item.qty ?? "0", 10);
+                    const hargaSatuan = parseFloat(item.harga_satuan ?? "0");
+
                     const subtotal = qty * hargaSatuan;
                     
                     return (
