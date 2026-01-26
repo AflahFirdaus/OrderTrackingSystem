@@ -80,14 +80,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // TODO: Hash password dengan bcrypt
-    // For now, we'll store it as plain text (NOT RECOMMENDED FOR PRODUCTION)
+    // Password disimpan plain text untuk internal company
     const { data: newUser, error: insertError } = await supabase
       .from("users")
       .insert({
         nama,
         username,
-        password, // Should be hashed
+        password,
         role,
       })
       .select("id, nama, username, role, created_at, updated_at")

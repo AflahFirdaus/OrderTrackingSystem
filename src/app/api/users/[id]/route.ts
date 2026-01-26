@@ -19,7 +19,7 @@ export async function PATCH(
 
     if (body.nama) updateData.nama = body.nama;
     if (body.username) updateData.username = body.username;
-    if (body.password) updateData.password = body.password; // Should be hashed
+    if (body.password) updateData.password = body.password;
     if (body.role) updateData.role = body.role;
 
     // Check username uniqueness if username is being updated

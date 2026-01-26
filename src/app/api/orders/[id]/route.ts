@@ -128,10 +128,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // Validate resi uniqueness if resi is being updated
+    if (body.resi && body.resi.trim()) {
+      const { data: existingResi } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("resi", body.resi.trim())
+        .neq("id", id) // Exclude current order
+        .single();
+
+      if (existingResi) {
+        return NextResponse.json(
+          { error: "Resi sudah terdaftar untuk order lain" },
+          { status: 409 }
+        );
+      }
+    }
+
     const { data: updatedOrder, error: updateError } = await supabase
       .from("orders")
       .update({
         ...body,
+        resi: body.resi !== undefined ? (body.resi && body.resi.trim() ? body.resi.trim() : null) : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

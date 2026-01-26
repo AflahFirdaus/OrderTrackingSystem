@@ -1,4 +1,4 @@
-import { Gauge, type LucideIcon, QrCode, Package, Users as UsersIcon } from "lucide-react";
+import { Gauge, type LucideIcon, QrCode, Package, Users as UsersIcon, PackageCheck } from "lucide-react";
 import type { UserRole } from "@/types/database";
 
 export type SiteConfig = typeof siteConfig;
@@ -32,6 +32,12 @@ export const getNavigations = (role?: UserRole): Navigation[] => {
       icon: UsersIcon,
       name: "Users",
       href: "/users",
+      roles: ["admin"],
+    },
+    {
+      icon: PackageCheck,
+      name: "Packing",
+      href: "/packing",
       roles: ["admin"],
     },
     {

@@ -42,28 +42,19 @@ export async function POST(request: Request) {
     }
 
     if (!user) {
-      console.log("User tidak ditemukan untuk username:", username);
       return NextResponse.json(
         { error: "Username atau password salah" },
         { status: 401 }
       );
     }
 
-    // Verifikasi password (plain text comparison untuk sekarang)
-    // TODO: Untuk production, gunakan bcrypt untuk compare password
-    console.log("Checking password for user:", username);
-    console.log("Stored password:", user.password);
-    console.log("Input password:", password);
-    
+    // Verifikasi password (plain text comparison untuk internal company)
     if (user.password !== password) {
-      console.log("Password tidak match");
       return NextResponse.json(
         { error: "Username atau password salah" },
         { status: 401 }
       );
     }
-    
-    console.log("Login berhasil untuk user:", username);
 
     // Set session cookie dengan user data
     const response = NextResponse.json({

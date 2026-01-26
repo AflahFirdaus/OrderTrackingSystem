@@ -1,25 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import Container from "@/components/container";
-import { ORDER_STATUSES, PLATFORMS } from "@/lib/constants";
+import { ORDER_STATUSES, getStatusColor } from "@/lib/constants";
 import type { OrderWithItems, User, OrderStatus } from "@/types/database";
 import { QRCodeSVG } from "qrcode.react";
 import { getQrUrl } from "@/lib/utils/qr-token";
 import { downloadReceipt } from "@/lib/utils/generate-receipt";
 import { SidebarForm } from "@/components/sidebar-form";
+import { AlertModal } from "@/components/alert-modal";
+import { Pagination } from "@/components/pagination";
 import { Plus, Search, Download, X, FileText } from "lucide-react";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({ isOpen: false, title: "", message: "" });
 
   // Order form state
   const [orderForm, setOrderForm] = useState({
@@ -29,7 +38,7 @@ export default function OrdersPage() {
     tanggal_pemesanan: new Date().toISOString().split("T")[0],
     total_harga: "",
     keterangan: "",
-    expedisi: "",
+    expedisi: "Reguler",
     order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
   });
 
@@ -110,6 +119,16 @@ export default function OrdersPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Handle duplicate order error with beautiful alert
+        if (res.status === 409) {
+          const errorMessage = data.details || `Order ID "${dataToSubmit.order_id_marketplace}" sudah terdaftar dalam sistem. Silakan gunakan Order ID yang berbeda.`;
+          setAlertModal({
+            isOpen: true,
+            title: "Order ID Sudah Terdaftar",
+            message: errorMessage,
+          });
+          return;
+        }
         throw new Error(data.error || "Gagal membuat order");
       }
 
@@ -121,7 +140,7 @@ export default function OrdersPage() {
         tanggal_pemesanan: new Date().toISOString().split("T")[0],
         total_harga: "",
         keterangan: "",
-        expedisi: "",
+        expedisi: "Reguler",
         order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
       });
       fetchOrders();
@@ -151,13 +170,31 @@ export default function OrdersPage() {
     }
   };
 
-  const filteredOrders = Array.isArray(orders)
-    ? orders.filter(
-        (order) =>
-          order?.order_id_marketplace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order?.nama_pembeli?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : [];
+  // Filter orders based on search term
+  const filteredOrders = useMemo(() => {
+    return Array.isArray(orders)
+      ? orders.filter(
+          (order) =>
+            order?.order_id_marketplace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order?.nama_pembeli?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : [];
+  }, [orders, searchTerm]);
+
+  // Paginate filtered orders
+  const paginatedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredOrders.slice(startIndex, endIndex);
+  }, [filteredOrders, currentPage, itemsPerPage]);
+
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   if (currentUser?.role !== "admin") {
     return (
@@ -215,26 +252,29 @@ export default function OrdersPage() {
                 {searchTerm ? "Tidak ada order yang sesuai dengan pencarian" : "Belum ada order"}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="p-2 text-left text-sm">Order ID</th>
-                      <th className="p-2 text-left text-sm">Pembeli</th>
-                      <th className="p-2 text-left text-sm">Platform</th>
-                      <th className="p-2 text-left text-sm">Status</th>
-                      <th className="p-2 text-left text-sm">Total</th>
-                      <th className="p-2 text-left text-sm">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredOrders.map((order) => (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="p-2 text-left text-sm">Order ID</th>
+                        <th className="p-2 text-left text-sm">Pembeli</th>
+                        <th className="p-2 text-left text-sm">Platform</th>
+                        <th className="p-2 text-left text-sm">Ekspedisi</th>
+                        <th className="p-2 text-left text-sm">Status</th>
+                        <th className="p-2 text-left text-sm">Total</th>
+                        <th className="p-2 text-left text-sm">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedOrders.map((order) => (
                       <tr key={order.id} className="border-b hover:bg-muted/50">
                         <td className="p-2">{order.order_id_marketplace}</td>
                         <td className="p-2">{order.nama_pembeli}</td>
                         <td className="p-2">{order.platform_penjualan}</td>
+                        <td className="p-2">{order.expedisi}</td>
                         <td className="p-2">
-                          <span className="px-2 py-1 rounded text-xs bg-muted">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status as OrderStatus)}`}>
                             {ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES] || order.status}
                           </span>
                         </td>
@@ -251,10 +291,20 @@ export default function OrdersPage() {
                           </Button>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {filteredOrders.length > itemsPerPage && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={filteredOrders.length}
+                  />
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -289,10 +339,18 @@ export default function OrdersPage() {
                     <p className="font-medium">{ORDER_STATUSES[selectedOrder.status]}</p>
                   </div>
                   <div>
+                    <p className="text-sm text-muted-foreground">Resi</p>
+                    <p className="font-medium">{selectedOrder.resi || "-"}</p>
+                  </div>
+                  <div>
                     <p className="text-sm text-muted-foreground">Total Harga</p>
                     <p className="font-medium">
                       Rp {selectedOrder.total_harga.toLocaleString("id-ID")}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Ekspedisi</p>
+                    <p className="font-medium">{selectedOrder.expedisi}</p>
                   </div>
                 </div>
 
@@ -399,7 +457,7 @@ export default function OrdersPage() {
               tanggal_pemesanan: new Date().toISOString().split("T")[0],
               total_harga: "",
               keterangan: "",
-              expedisi: "",
+              expedisi: "Reguler",
               order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
             });
           }}
@@ -408,6 +466,15 @@ export default function OrdersPage() {
             await handleCreateOrder(null, data);
           }}
           loading={loading}
+        />
+
+        {/* Alert Modal for Duplicate Order */}
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal({ isOpen: false, title: "", message: "" })}
+          title={alertModal.title}
+          message={alertModal.message}
+          type="error"
         />
       </div>
     </Container>

@@ -36,12 +36,22 @@ export async function GET(
 
     // Check if user can process this order
     const canProcess = canProcessOrder(userRole, order.status as any);
+    
+    // Special message for gudang trying to scan already processed order
+    let warningMessage = null;
+    if (userRole === "gudang" && order.status !== "DIBUAT") {
+      // All statuses except DIBUAT means order has been processed
+      if (order.status === "DITERIMA_GUDANG" || order.status === "PACKING" || order.status === "DIKIRIM" || order.status === "SELESAI" || order.status === "DIBATALKAN") {
+        warningMessage = "Orderan telah di proses gudang";
+      }
+    }
 
     return NextResponse.json({
       order,
       user: userData,
       canProcess,
       nextStatus: canProcess ? getNextStatus(order.status as any) : null,
+      warningMessage,
     });
   } catch (error) {
     console.error("Error scanning QR:", error);
@@ -80,9 +90,19 @@ export async function POST(
 
     // Validate if user can process this order
     if (!canProcessOrder(userRole, order.status as any)) {
+      // Special message for gudang trying to scan already processed order
+      let errorMessage = `Anda tidak dapat memproses order dengan status ${order.status}`;
+      
+      if (userRole === "gudang" && order.status !== "DIBUAT") {
+        // All statuses except DIBUAT means order has been processed
+        if (order.status === "DITERIMA_GUDANG" || order.status === "PACKING" || order.status === "DIKIRIM" || order.status === "SELESAI" || order.status === "DIBATALKAN") {
+          errorMessage = "Orderan telah di proses gudang. Tidak dapat diproses ulang.";
+        }
+      }
+      
       return NextResponse.json(
         {
-          error: `Anda tidak dapat memproses order dengan status ${order.status}`,
+          error: errorMessage,
         },
         { status: 403 }
       );

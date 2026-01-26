@@ -25,6 +25,8 @@ export const USER_ROLES: Record<UserRole, string> = {
 
 export const PLATFORMS = ["Shopee", "Tokopedia", "Blibli"] as const;
 
+export const EXPEDISI_OPTIONS = ["Reguler", "Instan", "Andi"] as const;
+
 export function canProcessOrder(
   userRole: UserRole,
   currentStatus: OrderStatus
@@ -50,4 +52,16 @@ export function getNextStatus(currentStatus: OrderStatus): OrderStatus | null {
     return null;
   }
   return ORDER_STATUS_FLOW[currentIndex + 1];
+}
+
+export function getStatusColor(status: OrderStatus): string {
+  const colorMap: Record<OrderStatus, string> = {
+    DIBUAT: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    DITERIMA_GUDANG: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+    PACKING: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+    DIKIRIM: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+    SELESAI: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+    DIBATALKAN: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  };
+  return colorMap[status] || "bg-muted text-muted-foreground";
 }

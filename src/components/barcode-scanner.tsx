@@ -1,22 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface QRScannerProps {
+interface BarcodeScannerProps {
   onScanSuccess: (decodedText: string) => void;
   onClose: () => void;
 }
 
-export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
+export function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScannerProps) {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>("");
   const [isScanning, setIsScanning] = useState(false);
-  const scannerIdRef = useRef<string>(`qr-reader-${Date.now()}-${Math.random()}`);
+  const scannerIdRef = useRef<string>(`barcode-reader-${Date.now()}-${Math.random()}`);
   const onScanSuccessRef = useRef(onScanSuccess);
   const onCloseRef = useRef(onClose);
   const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -29,14 +29,8 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
 
   // Handle scan success without causing re-renders
   const handleScanSuccess = useCallback((decodedText: string) => {
-    // Extract token from URL if it's a full URL
-    let token = decodedText;
-    
-    // If it's a URL like https://domain.com/scan/{token}, extract the token
-    const urlMatch = decodedText.match(/\/scan\/([^/]+)/);
-    if (urlMatch) {
-      token = urlMatch[1];
-    }
+    // For barcode/resi, we just use the decoded text directly
+    const resi = decodedText.trim();
     
     // Stop scanning before calling callback
     if (scannerRef.current) {
@@ -52,7 +46,7 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
     
     setIsScanning(false);
     // Use ref to avoid dependency issues
-    onScanSuccessRef.current(token);
+    onScanSuccessRef.current(resi);
   }, []);
 
   useEffect(() => {
@@ -87,11 +81,25 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
           uniqueId,
           {
             qrbox: {
-              width: 250,
-              height: 250,
+              width: 400,
+              height: 200,
             },
             fps: 10,
             aspectRatio: 1.0,
+            // Explicitly support barcode formats for better detection
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.CODE_93,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.ITF,
+              Html5QrcodeSupportedFormats.QR_CODE, // Also support QR codes
+            ],
+            rememberLastUsedCamera: true,
+            showTorchButtonIfSupported: true,
           },
           false // verbose
         );
@@ -212,7 +220,7 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Scan QR Code</CardTitle>
+            <CardTitle>Scan Barcode Resi</CardTitle>
             <Button variant="ghost" size="icon" onClick={handleClose}>
               <X className="h-4 w-4" />
             </Button>
@@ -227,7 +235,7 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
           )}
           {error && (
             <p className="text-sm text-muted-foreground mt-2 text-center">
-              Arahkan kamera ke QR Code
+              Arahkan kamera ke barcode resi
             </p>
           )}
           <Button

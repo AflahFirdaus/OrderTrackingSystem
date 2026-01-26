@@ -7,33 +7,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { PlatformPenjualan } from "@/types/database";
-import { PLATFORMS } from "@/lib/constants";
+import { PLATFORMS, EXPEDISI_OPTIONS } from "@/lib/constants";
+
+interface InitialData {
+  orderForm?: {
+    order_id_marketplace?: string;
+    nama_pembeli?: string;
+    platform_penjualan?: PlatformPenjualan;
+    tanggal_pemesanan?: string;
+    total_harga?: string;
+    resi?: string;
+    keterangan?: string;
+    expedisi?: string;
+    order_items?: Array<{ nama_produk: string; qty: string; harga_satuan: string }>;
+  };
+  userForm?: {
+    nama?: string;
+    username?: string;
+    password?: string;
+    role?: "admin" | "gudang" | "packing";
+  };
+}
 
 interface SidebarFormProps {
   isOpen: boolean;
   onClose: () => void;
   type: "order" | "user";
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: unknown) => Promise<void>;
   loading?: boolean;
-  initialData?: any;
-}
-
-interface OrderItem {
-  nama_produk?: string;
-  qty?: string;
-  harga_satuan?: string;
-}
-
-interface OrderForm {
-  order_id_marketplace: string;
-  nama_pembeli: string;
-  platform_penjualan: PlatformPenjualan;
-  tanggal_pemesanan: string;
-  total_harga: string;
-  ongkir: string;
-  keterangan: string;
-  expedisi: string;
-  order_items: OrderItem[];
+  initialData?: InitialData;
 }
 
 export function SidebarForm({
@@ -44,19 +46,32 @@ export function SidebarForm({
   loading = false,
   initialData,
 }: SidebarFormProps) {
-  const [orderForm, setOrderForm] = useState<OrderForm>({
-    order_id_marketplace: "",
-    nama_pembeli: "",
-    platform_penjualan: "Shopee",
-    tanggal_pemesanan: new Date().toISOString().split("T")[0],
-    total_harga: "",
-    ongkir: "",
-    keterangan: "",
-    expedisi: "",
-    order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
-    ...(initialData?.orderForm || {}),
+  const [orderForm, setOrderForm] = useState(() => {
+    const baseForm = {
+      order_id_marketplace: "",
+      nama_pembeli: "",
+      platform_penjualan: "Shopee" as PlatformPenjualan,
+      tanggal_pemesanan: new Date().toISOString().split("T")[0],
+      total_harga: "",
+      resi: "",
+      keterangan: "",
+      expedisi: "Reguler",
+      order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
+    };
+    
+    if (initialData?.orderForm) {
+      return {
+        ...baseForm,
+        ...initialData.orderForm,
+        // Ensure expedisi always has a valid value (override if empty from initialData)
+        expedisi: (initialData.orderForm.expedisi && initialData.orderForm.expedisi.trim()) 
+          ? initialData.orderForm.expedisi 
+          : "Reguler",
+      };
+    }
+    
+    return baseForm;
   });
-
 
   const [userForm, setUserForm] = useState({
     nama: "",
@@ -69,39 +84,32 @@ export function SidebarForm({
   // Calculate subtotal from order_items
   const subtotalItems = useMemo(() => {
     if (type !== "order") return 0;
-
+    
+    type OrderItemForm = { nama_produk: string; qty: string; harga_satuan: string };
+    
     return orderForm.order_items
-      .filter(
-        (item: OrderItem) =>
-          item.nama_produk &&
-          item.qty &&
-          item.harga_satuan
-      )
-      .reduce((total: number, item: OrderItem) => {
-        const qty = parseInt(item.qty ?? "0", 10);
-        const hargaSatuan = parseFloat(item.harga_satuan ?? "0");
-        return total + qty * hargaSatuan;
+      .filter((item: OrderItemForm) => item.nama_produk && item.qty && item.harga_satuan)
+      .reduce((total: number, item: OrderItemForm) => {
+        const qty = parseInt(item.qty) || 0;
+        const hargaSatuan = parseFloat(item.harga_satuan) || 0;
+        return total + (qty * hargaSatuan);
       }, 0);
   }, [orderForm.order_items, type]);
 
-
-  // Calculate total: subtotal + ongkir (if provided)
+  // Calculate total: subtotal (no ongkir anymore, total is just subtotal)
   const calculatedTotal = useMemo(() => {
     if (type !== "order") return 0;
-    const ongkirValue = parseFloat(orderForm.ongkir) || 0;
-    return subtotalItems + ongkirValue;
-  }, [subtotalItems, orderForm.ongkir, type]);
+    return subtotalItems;
+  }, [subtotalItems, type]);
 
   // Auto-update total_harga when calculatedTotal changes (only if user hasn't manually edited)
   const [isTotalManuallyEdited, setIsTotalManuallyEdited] = useState(false);
 
   useEffect(() => {
     if (type === "order" && !isTotalManuallyEdited) {
-      setOrderForm((prev) => ({
+      setOrderForm((prev: typeof orderForm) => ({
         ...prev,
-        total_harga: calculatedTotal > 0
-          ? calculatedTotal.toString()
-          : "",
+        total_harga: calculatedTotal > 0 ? calculatedTotal.toString() : "",
       }));
     }
   }, [calculatedTotal, type, isTotalManuallyEdited]);
@@ -109,14 +117,15 @@ export function SidebarForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (type === "order") {
+      type OrderItemForm = { nama_produk: string; qty: string; harga_satuan: string };
+      
       const orderItems = orderForm.order_items
-        .filter((item) => item.nama_produk && item.qty && item.harga_satuan)
-        .map((item) => ({
-          nama_produk: item.nama_produk!,
-          qty: parseInt(item.qty ?? "0", 10),
-          harga_satuan: parseFloat(item.harga_satuan ?? "0"),
+        .filter((item: OrderItemForm) => item.nama_produk && item.qty && item.harga_satuan)
+        .map((item: OrderItemForm) => ({
+          nama_produk: item.nama_produk,
+          qty: parseInt(item.qty),
+          harga_satuan: parseFloat(item.harga_satuan),
         }));
-
 
       // Use manual total if edited, otherwise use calculated total
       const finalTotal = isTotalManuallyEdited && orderForm.total_harga
@@ -142,9 +151,9 @@ export function SidebarForm({
         platform_penjualan: "Shopee",
         tanggal_pemesanan: new Date().toISOString().split("T")[0],
         total_harga: "",
-        ongkir: "",
+        resi: "",
         keterangan: "",
-        expedisi: "",
+        expedisi: "Reguler",
         order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
       });
       setIsTotalManuallyEdited(false);
@@ -159,13 +168,22 @@ export function SidebarForm({
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <aside
-      className={cn(
-        "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-border bg-background shadow-lg transition-transform duration-300 ease-in-out laptop:max-w-lg",
-        isOpen ? "translate-x-0" : "translate-x-full"
-      )}
-    >
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 z-40"
+        onClick={handleClose}
+      />
+      
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-border bg-background shadow-lg transition-transform duration-300 ease-in-out laptop:max-w-lg"
+        )}
+      >
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-semibold">
@@ -236,33 +254,10 @@ export function SidebarForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Ongkir (Opsional)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0"
-                    value={orderForm.ongkir}
-                    onChange={(e) => {
-                      setOrderForm({ ...orderForm, ongkir: e.target.value });
-                      setIsTotalManuallyEdited(false); // Reset manual edit when ongkir changes
-                    }}
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Biaya ongkir akan ditambahkan ke subtotal item
-                  </p>
-                </div>
-                <div className="space-y-2">
                   <label className="text-sm font-medium">Total Harga</label>
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground mb-1">
                       Subtotal Item: Rp {subtotalItems.toLocaleString("id-ID")}
-                      {orderForm.ongkir && parseFloat(orderForm.ongkir) > 0 && (
-                        <span className="ml-2">
-                          + Ongkir: Rp {parseFloat(orderForm.ongkir).toLocaleString("id-ID")}
-                        </span>
-                      )}
                     </div>
                     <Input
                       type="number"
@@ -285,20 +280,41 @@ export function SidebarForm({
                     <p className="text-xs text-muted-foreground">
                       {isTotalManuallyEdited 
                         ? "Total harga diubah manual. Kosongkan untuk kembali ke kalkulasi otomatis."
-                        : "Total harga dihitung otomatis (Subtotal + Ongkir). Bisa diedit manual jika perlu."}
+                        : "Total harga dihitung otomatis dari subtotal item. Bisa diedit manual jika perlu."}
                     </p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Ekspedisi *</label>
+                  <label className="text-sm font-medium">Resi (Opsional)</label>
                   <Input
-                    value={orderForm.expedisi}
+                    value={orderForm.resi}
+                    onChange={(e) =>
+                      setOrderForm({ ...orderForm, resi: e.target.value })
+                    }
+                    placeholder="Nomor resi pengiriman"
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Nomor resi dapat diisi nanti atau di-scan melalui halaman Packing
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Ekspedisi *</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={orderForm.expedisi || "Reguler"}
                     onChange={(e) =>
                       setOrderForm({ ...orderForm, expedisi: e.target.value })
                     }
                     required
                     disabled={loading}
-                  />
+                  >
+                    {EXPEDISI_OPTIONS.map((expedisi) => (
+                      <option key={expedisi} value={expedisi}>
+                        {expedisi}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Keterangan</label>
@@ -312,10 +328,9 @@ export function SidebarForm({
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Item Order</label>
-                  {orderForm.order_items.map((item, index) => {
-                    const qty = parseInt(item.qty ?? "0", 10);
-                    const hargaSatuan = parseFloat(item.harga_satuan ?? "0");
-
+                  {orderForm.order_items.map((item: { nama_produk: string; qty: string; harga_satuan: string }, index: number) => {
+                    const qty = parseInt(item.qty) || 0;
+                    const hargaSatuan = parseFloat(item.harga_satuan) || 0;
                     const subtotal = qty * hargaSatuan;
                     
                     return (
@@ -364,7 +379,7 @@ export function SidebarForm({
                             variant="destructive"
                             size="icon"
                             onClick={() => {
-                              const newItems = orderForm.order_items.filter((_, i) => i !== index);
+                              const newItems = orderForm.order_items.filter((_: { nama_produk: string; qty: string; harga_satuan: string }, i: number) => i !== index);
                               setOrderForm({ ...orderForm, order_items: newItems });
                             }}
                             disabled={loading || orderForm.order_items.length === 1}
@@ -465,5 +480,6 @@ export function SidebarForm({
         </div>
       </div>
     </aside>
+    </>
   );
 }

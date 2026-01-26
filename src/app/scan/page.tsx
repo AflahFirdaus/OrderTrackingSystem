@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { QRScanner } from "@/components/qr-scanner";
+import { AlertModal } from "@/components/alert-modal";
 import { ORDER_STATUSES } from "@/lib/constants";
 import type { OrderWithItems } from "@/types/database";
-import { Camera, QrCode } from "lucide-react";
+import { Camera } from "lucide-react";
 
 export default function ScanPage() {
   const router = useRouter();
@@ -17,10 +18,16 @@ export default function ScanPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [warning, setWarning] = useState("");
   const [user, setUser] = useState<any>(null);
   const [canProcess, setCanProcess] = useState(false);
   const [nextStatus, setNextStatus] = useState<string | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  }>({ isOpen: false, title: "", message: "" });
 
   useEffect(() => {
     // Get user info
@@ -43,6 +50,7 @@ export default function ScanPage() {
     setLoading(true);
     setError("");
     setSuccess("");
+    setWarning("");
 
     try {
       const response = await fetch(`/api/scan/${token}`, {
@@ -61,6 +69,14 @@ export default function ScanPage() {
       setNextStatus(null);
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
+      // Show beautiful alert modal for specific gudang error
+      if (err.message?.includes("Orderan telah di proses gudang") || err.message?.includes("sudah pernah diproses") || err.message?.includes("DITERIMA_GUDANG") || err.message?.includes("PACKING") || err.message?.includes("DIKIRIM") || err.message?.includes("SELESAI")) {
+        setAlertModal({
+          isOpen: true,
+          title: "Orderan Telah Di Proses",
+          message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -74,6 +90,7 @@ export default function ScanPage() {
     setLoading(true);
     setError("");
     setSuccess("");
+    setWarning("");
     setOrder(null);
 
     try {
@@ -88,8 +105,31 @@ export default function ScanPage() {
       setUser(data.user);
       setCanProcess(data.canProcess);
       setNextStatus(data.nextStatus);
+      
+      // Show warning if order already processed
+      if (data.warningMessage) {
+        setWarning(data.warningMessage);
+        // Show beautiful alert modal for gudang trying to scan already processed order
+        if (data.user?.role === "gudang" && data.order?.status !== "DIBUAT") {
+          if (data.order?.status === "DITERIMA_GUDANG" || data.order?.status === "PACKING" || data.order?.status === "DIKIRIM" || data.order?.status === "SELESAI" || data.order?.status === "DIBATALKAN") {
+            setAlertModal({
+              isOpen: true,
+              title: "Orderan Telah Di Proses",
+              message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+            });
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
+      // Show beautiful alert modal for specific gudang error
+      if (err.message?.includes("Orderan telah di proses gudang") || err.message?.includes("sudah pernah diproses") || err.message?.includes("DITERIMA_GUDANG") || err.message?.includes("PACKING") || err.message?.includes("DIKIRIM") || err.message?.includes("SELESAI")) {
+        setAlertModal({
+          isOpen: true,
+          title: "Orderan Telah Di Proses",
+          message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -105,6 +145,7 @@ export default function ScanPage() {
     setLoading(true);
     setError("");
     setSuccess("");
+    setWarning("");
     setOrder(null);
 
     try {
@@ -119,8 +160,31 @@ export default function ScanPage() {
       setUser(data.user);
       setCanProcess(data.canProcess);
       setNextStatus(data.nextStatus);
+      
+      // Show warning if order already processed
+      if (data.warningMessage) {
+        setWarning(data.warningMessage);
+        // Show beautiful alert modal for gudang trying to scan already processed order
+        if (data.user?.role === "gudang" && data.order?.status !== "DIBUAT") {
+          if (data.order?.status === "DITERIMA_GUDANG" || data.order?.status === "PACKING" || data.order?.status === "DIKIRIM" || data.order?.status === "SELESAI" || data.order?.status === "DIBATALKAN") {
+            setAlertModal({
+              isOpen: true,
+              title: "Orderan Telah Di Proses",
+              message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+            });
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
+      // Show beautiful alert modal for specific gudang error
+      if (err.message?.includes("Orderan telah di proses gudang") || err.message?.includes("sudah pernah diproses") || err.message?.includes("DITERIMA_GUDANG") || err.message?.includes("PACKING") || err.message?.includes("DIKIRIM") || err.message?.includes("SELESAI")) {
+        setAlertModal({
+          isOpen: true,
+          title: "Orderan Telah Di Proses",
+          message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -147,6 +211,11 @@ export default function ScanPage() {
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
+              </div>
+            )}
+            {warning && (
+              <div className="rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-600 dark:text-yellow-400 border border-yellow-500/20">
+                ⚠️ {warning}
               </div>
             )}
             {success && (
@@ -294,6 +363,15 @@ export default function ScanPage() {
           onClose={() => setShowScanner(false)}
         />
       )}
+
+      {/* Alert Modal for Gudang Processed Order */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ isOpen: false, title: "", message: "" })}
+        title={alertModal.title}
+        message={alertModal.message}
+        type="warning"
+      />
     </div>
   );
 }

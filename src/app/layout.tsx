@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Gabarito } from "next/font/google";
-import { SideNav } from "@/components/nav";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 import "@/style/globals.css";

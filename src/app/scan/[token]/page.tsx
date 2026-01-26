@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertModal } from "@/components/alert-modal";
 import { ORDER_STATUSES } from "@/lib/constants";
 import type { OrderWithItems } from "@/types/database";
 
@@ -15,20 +16,28 @@ export default function ScanTokenPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [warning, setWarning] = useState("");
   const [user, setUser] = useState<any>(null);
   const [canProcess, setCanProcess] = useState(false);
   const [nextStatus, setNextStatus] = useState<string | null>(null);
+  const [alertModal, setAlertModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+  });
 
   useEffect(() => {
     if (token) {
       fetchOrder();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchOrder = async () => {
     setLoading(true);
     setError("");
     setSuccess("");
+    setWarning("");
 
     try {
       const response = await fetch(`/api/scan/${token}`);
@@ -42,8 +51,31 @@ export default function ScanTokenPage() {
       setUser(data.user);
       setCanProcess(data.canProcess);
       setNextStatus(data.nextStatus);
+      
+      // Show warning if order already processed
+      if (data.warningMessage) {
+        setWarning(data.warningMessage);
+        // Show beautiful alert modal for gudang trying to scan already processed order
+        if (data.user?.role === "gudang" && data.order?.status !== "DIBUAT") {
+          if (data.order?.status === "DITERIMA_GUDANG" || data.order?.status === "PACKING" || data.order?.status === "DIKIRIM" || data.order?.status === "SELESAI" || data.order?.status === "DIBATALKAN") {
+            setAlertModal({
+              isOpen: true,
+              title: "Orderan Telah Di Proses",
+              message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+            });
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
+      // Show beautiful alert modal for specific gudang error
+      if (err.message?.includes("Orderan telah di proses gudang") || err.message?.includes("sudah pernah diproses") || err.message?.includes("DITERIMA_GUDANG") || err.message?.includes("PACKING") || err.message?.includes("DIKIRIM") || err.message?.includes("SELESAI")) {
+        setAlertModal({
+          isOpen: true,
+          title: "Orderan Telah Di Proses",
+          message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -55,6 +87,7 @@ export default function ScanTokenPage() {
     setLoading(true);
     setError("");
     setSuccess("");
+    setWarning("");
 
     try {
       const response = await fetch(`/api/scan/${token}`, {
@@ -73,6 +106,14 @@ export default function ScanTokenPage() {
       setNextStatus(null);
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
+      // Show beautiful alert modal for specific gudang error
+      if (err.message?.includes("Orderan telah di proses gudang") || err.message?.includes("sudah pernah diproses") || err.message?.includes("DITERIMA_GUDANG") || err.message?.includes("PACKING") || err.message?.includes("DIKIRIM") || err.message?.includes("SELESAI")) {
+        setAlertModal({
+          isOpen: true,
+          title: "Orderan Telah Di Proses",
+          message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -119,6 +160,11 @@ export default function ScanTokenPage() {
           {error && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
               {error}
+            </div>
+          )}
+          {warning && (
+            <div className="rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-600 dark:text-yellow-400 border border-yellow-500/20">
+              ⚠️ {warning}
             </div>
           )}
           {success && (
@@ -225,6 +271,15 @@ export default function ScanTokenPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Alert Modal for Gudang Processed Order */}
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal({ isOpen: false, title: "", message: "" })}
+        title={alertModal.title}
+        message={alertModal.message}
+        type="warning"
+      />
     </div>
   );
 }

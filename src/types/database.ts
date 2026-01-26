@@ -30,6 +30,7 @@ export interface Order {
   total_harga: number;
   keterangan: string | null;
   expedisi: string;
+  resi: string | null;
   qr_token: string;
   created_by: string;
   created_at?: string;

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { generateQrToken } from "@/lib/utils/qr-token";
 import { NextResponse } from "next/server";
-import type { Order, OrderItem } from "@/types/database";
+import type { OrderItem } from "@/types/database";
 
 export async function GET(request: Request) {
   try {
@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       total_harga,
       keterangan,
       expedisi,
+      resi,
       order_items,
       created_by,
     } = body;
@@ -115,19 +116,38 @@ export async function POST(request: Request) {
     // Validasi anti-duplikasi order_id_marketplace
     const { data: existingOrder } = await supabase
       .from("orders")
-      .select("id")
+      .select("id, order_id_marketplace, nama_pembeli, status")
       .eq("order_id_marketplace", order_id_marketplace)
       .single();
 
     if (existingOrder) {
       return NextResponse.json(
-        { error: "Order ID marketplace sudah terdaftar" },
+        { 
+          error: "Order ID marketplace sudah terdaftar",
+          details: `Order ID "${order_id_marketplace}" sudah digunakan untuk order dengan pembeli "${existingOrder.nama_pembeli}" (Status: ${existingOrder.status})`
+        },
         { status: 409 }
       );
     }
 
     // Generate QR token
     const qr_token = generateQrToken();
+
+    // Validate resi uniqueness if provided
+    if (resi && resi.trim()) {
+      const { data: existingResi } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("resi", resi.trim())
+        .single();
+
+      if (existingResi) {
+        return NextResponse.json(
+          { error: "Resi sudah terdaftar untuk order lain" },
+          { status: 409 }
+        );
+      }
+    }
 
     // Insert order
     const { data: order, error: orderError } = await supabase
@@ -141,6 +161,7 @@ export async function POST(request: Request) {
         total_harga: calculatedTotalHarga,
         keterangan: keterangan || null,
         expedisi,
+        resi: resi && resi.trim() ? resi.trim() : null,
         qr_token,
         created_by,
       })
