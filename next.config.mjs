@@ -10,6 +10,13 @@ const nextConfig = {
     // your project has type errors.
     ignoreBuildErrors: false,
   },
+  // Optimize for production
+  reactStrictMode: true,
+  swcMinify: true,
+  // Ensure proper image optimization
+  images: {
+    formats: ['image/avif', 'image/webp'],
+  },
 };
 
 export default nextConfig;

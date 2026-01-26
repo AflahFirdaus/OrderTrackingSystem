@@ -13,7 +13,7 @@ import { downloadReceipt } from "@/lib/utils/generate-receipt";
 import { SidebarForm } from "@/components/sidebar-form";
 import { AlertModal } from "@/components/alert-modal";
 import { Pagination } from "@/components/pagination";
-import { Plus, Search, Download, X, FileText } from "lucide-react";
+import { Plus, Search, Download, X, FileText, Edit } from "lucide-react";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
@@ -23,6 +23,7 @@ export default function OrdersPage() {
   const itemsPerPage = 15;
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null);
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<OrderWithItems | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
@@ -138,6 +139,7 @@ export default function OrdersPage() {
       }
 
       setShowOrderForm(false);
+      setEditingOrder(null);
       setOrderForm({
         order_id_marketplace: "",
         nama_pembeli: "",
@@ -149,6 +151,65 @@ export default function OrdersPage() {
         order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
       });
       fetchOrders();
+    } catch (error: any) {
+      alert(error.message || "Terjadi kesalahan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditOrder = (order: OrderWithItems) => {
+    setEditingOrder(order);
+    setShowOrderForm(true);
+  };
+
+  const handleUpdateOrder = async (formData: any) => {
+    if (!editingOrder) return;
+    
+    setLoading(true);
+    try {
+      const dataToSubmit = {
+        ...formData,
+        total_harga: parseFloat(formData.total_harga),
+        order_items: formData.order_items
+          .filter((item: any) => item.nama_produk && item.qty && item.harga_satuan)
+          .map((item: any) => ({
+            nama_produk: item.nama_produk,
+            qty: parseInt(item.qty),
+            harga_satuan: parseFloat(item.harga_satuan),
+          })),
+      };
+
+      const res = await fetch(`/api/orders/${editingOrder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataToSubmit),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Handle duplicate order error with beautiful alert
+        if (res.status === 409) {
+          const errorMessage = data.details || `Order ID "${dataToSubmit.order_id_marketplace}" sudah terdaftar dalam sistem. Silakan gunakan Order ID yang berbeda.`;
+          setAlertModal({
+            isOpen: true,
+            title: "Order ID Sudah Terdaftar",
+            message: errorMessage,
+          });
+          return;
+        }
+        throw new Error(data.error || "Gagal mengupdate order");
+      }
+
+      setShowOrderForm(false);
+      setEditingOrder(null);
+      fetchOrders();
+      
+      // Update selected order if it's the one being edited
+      if (selectedOrder?.id === editingOrder.id) {
+        setSelectedOrder(data);
+      }
     } catch (error: any) {
       alert(error.message || "Terjadi kesalahan");
     } finally {
@@ -347,13 +408,22 @@ export default function OrdersPage() {
                           Rp {order.total_harga.toLocaleString("id-ID")}
                         </td>
                         <td className="p-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSelectedOrder(order)}
-                          >
-                            Detail
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedOrder(order)}
+                            >
+                              Detail
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditOrder(order)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                       ))}
@@ -488,22 +558,33 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-sm font-medium mb-2">Update Status</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {Object.entries(ORDER_STATUSES).map(([status, label]) => (
-                      <Button
-                        key={status}
-                        size="sm"
-                        variant={
-                          selectedOrder.status === status ? "default" : "outline"
-                        }
-                        onClick={() => handleUpdateOrderStatus(selectedOrder.id, status as OrderStatus)}
-                      >
-                        {label}
-                      </Button>
-                    ))}
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium mb-2">Update Status</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {Object.entries(ORDER_STATUSES).map(([status, label]) => (
+                        <Button
+                          key={status}
+                          size="sm"
+                          variant={
+                            selectedOrder.status === status ? "default" : "outline"
+                          }
+                          onClick={() => handleUpdateOrderStatus(selectedOrder.id, status as OrderStatus)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEditOrder(selectedOrder)}
+                    className="ml-4"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Order
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -515,6 +596,7 @@ export default function OrdersPage() {
           isOpen={showOrderForm}
           onClose={() => {
             setShowOrderForm(false);
+            setEditingOrder(null);
             setOrderForm({
               order_id_marketplace: "",
               nama_pembeli: "",
@@ -528,9 +610,30 @@ export default function OrdersPage() {
           }}
           type="order"
           onSubmit={async (data) => {
-            await handleCreateOrder(null, data);
+            if (editingOrder) {
+              await handleUpdateOrder(data);
+            } else {
+              await handleCreateOrder(null, data);
+            }
           }}
           loading={loading}
+          initialData={editingOrder ? {
+            orderForm: {
+              order_id_marketplace: editingOrder.order_id_marketplace,
+              nama_pembeli: editingOrder.nama_pembeli,
+              platform_penjualan: editingOrder.platform_penjualan,
+              tanggal_pemesanan: editingOrder.tanggal_pemesanan.split("T")[0],
+              total_harga: editingOrder.total_harga.toString(),
+              resi: editingOrder.resi || "",
+              keterangan: editingOrder.keterangan || "",
+              expedisi: editingOrder.expedisi,
+              order_items: editingOrder.order_items.map(item => ({
+                nama_produk: item.nama_produk,
+                qty: item.qty.toString(),
+                harga_satuan: item.harga_satuan.toString(),
+              })),
+            }
+          } : undefined}
         />
 
         {/* Alert Modal for Duplicate Order */}

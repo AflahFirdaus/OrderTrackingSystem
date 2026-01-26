@@ -73,6 +73,42 @@ export function SidebarForm({
     return baseForm;
   });
 
+  // Update form when initialData changes (for edit mode)
+  useEffect(() => {
+    if (type === "order" && initialData?.orderForm) {
+      setOrderForm({
+        order_id_marketplace: initialData.orderForm.order_id_marketplace || "",
+        nama_pembeli: initialData.orderForm.nama_pembeli || "",
+        platform_penjualan: initialData.orderForm.platform_penjualan || "Shopee",
+        tanggal_pemesanan: initialData.orderForm.tanggal_pemesanan || new Date().toISOString().split("T")[0],
+        total_harga: initialData.orderForm.total_harga || "",
+        resi: initialData.orderForm.resi || "",
+        keterangan: initialData.orderForm.keterangan || "",
+        expedisi: (initialData.orderForm.expedisi && initialData.orderForm.expedisi.trim()) 
+          ? initialData.orderForm.expedisi 
+          : "Reguler",
+        order_items: initialData.orderForm.order_items && initialData.orderForm.order_items.length > 0
+          ? initialData.orderForm.order_items
+          : [{ nama_produk: "", qty: "", harga_satuan: "" }],
+      });
+      setIsTotalManuallyEdited(false);
+    } else if (type === "order" && !initialData?.orderForm) {
+      // Reset to empty form when not editing
+      setOrderForm({
+        order_id_marketplace: "",
+        nama_pembeli: "",
+        platform_penjualan: "Shopee",
+        tanggal_pemesanan: new Date().toISOString().split("T")[0],
+        total_harga: "",
+        resi: "",
+        keterangan: "",
+        expedisi: "Reguler",
+        order_items: [{ nama_produk: "", qty: "", harga_satuan: "" }],
+      });
+      setIsTotalManuallyEdited(false);
+    }
+  }, [initialData, type]);
+
   const [userForm, setUserForm] = useState({
     nama: "",
     username: "",
@@ -104,6 +140,13 @@ export function SidebarForm({
 
   // Auto-update total_harga when calculatedTotal changes (only if user hasn't manually edited)
   const [isTotalManuallyEdited, setIsTotalManuallyEdited] = useState(false);
+
+  // Reset isTotalManuallyEdited when initialData changes
+  useEffect(() => {
+    if (type === "order" && initialData?.orderForm) {
+      setIsTotalManuallyEdited(false);
+    }
+  }, [initialData, type]);
 
   useEffect(() => {
     if (type === "order" && !isTotalManuallyEdited) {
@@ -187,7 +230,10 @@ export function SidebarForm({
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-semibold">
-            {type === "order" ? "Tambah Order" : initialData ? "Edit User" : "Tambah User"}
+            {type === "order" 
+              ? (initialData?.orderForm ? "Edit Order" : "Tambah Order")
+              : (initialData ? "Edit User" : "Tambah User")
+            }
           </h2>
           <Button variant="ghost" size="icon" onClick={handleClose}>
             <X className="h-4 w-4" />
@@ -470,7 +516,12 @@ export function SidebarForm({
 
             <div className="flex gap-2 pt-4">
               <Button type="submit" disabled={loading} className="flex-1">
-                {loading ? "Menyimpan..." : type === "order" ? "Simpan Order" : initialData ? "Update User" : "Simpan User"}
+                {loading 
+                  ? "Menyimpan..." 
+                  : type === "order" 
+                    ? (initialData?.orderForm ? "Update Order" : "Simpan Order")
+                    : (initialData ? "Update User" : "Simpan User")
+                }
               </Button>
               <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
                 Batal
