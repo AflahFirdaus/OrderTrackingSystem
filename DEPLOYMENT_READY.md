@@ -13,9 +13,8 @@
 
 2. **vercel.json** ✅
    - Build Command: `pnpm build`
-   - Install Command: `pnpm install --frozen-lockfile`
-   - Node Version: 20.x
    - Framework: Next.js
+   - **Catatan**: `installCommand` dan `nodeVersion` TIDAK bisa di-set di `vercel.json`, harus di-set di Vercel Dashboard
 
 3. **package.json** ✅
    - packageManager: "pnpm@10.0.0"
@@ -65,7 +64,7 @@ git push origin main
 2. **Set Build Settings** (di Settings → General):
    - Install Command: `pnpm install --frozen-lockfile`
    - Build Command: `pnpm build`
-   - Node.js Version: `20.x`
+   - Node.js Version: `20.x` (HARUS di-set di Dashboard, tidak bisa di `vercel.json`)
 3. **Set Environment Variables** (di Settings → Environment Variables):
    ```
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co

@@ -12,9 +12,8 @@
 
 - [x] **vercel.json** - Sudah dikonfigurasi
   - Build Command: `pnpm build`
-  - Install Command: `pnpm install --frozen-lockfile`
-  - Node Version: 20.x
   - Framework: Next.js
+  - **Catatan**: `installCommand` dan `nodeVersion` TIDAK bisa di-set di `vercel.json`, harus di-set di Vercel Dashboard
 
 - [x] **package.json** - Sudah dikonfigurasi
   - packageManager: "pnpm@10.0.0"
@@ -92,7 +91,9 @@ git push
 
 ### Step 4: Configure Build Settings
 
-**PENTING**: Set manual di Vercel Dashboard karena Vercel mungkin mengabaikan `installCommand` di `vercel.json`
+**PENTING**: 
+- Set manual di Vercel Dashboard karena Vercel mungkin mengabaikan `installCommand` di `vercel.json`
+- **Node.js Version** TIDAK bisa di-set di `vercel.json`, harus di-set di Vercel Dashboard
 
 1. Buka **Vercel Dashboard → Project Settings → General**
 2. Scroll ke bagian **"Build & Development Settings"**
@@ -101,7 +102,7 @@ git push
    - **Build Command**: `pnpm build`
    - **Install Command**: `pnpm install --frozen-lockfile`
    - **Output Directory**: `.next` (auto-detect)
-   - **Node.js Version**: `20.x`
+   - **Node.js Version**: `20.x` (HARUS di-set di Dashboard, tidak bisa di `vercel.json`)
 
 ### Step 5: Set Environment Variables
 
