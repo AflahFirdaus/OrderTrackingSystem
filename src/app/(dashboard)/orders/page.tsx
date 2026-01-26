@@ -30,6 +30,11 @@ export default function OrdersPage() {
     message: string;
   }>({ isOpen: false, title: "", message: "" });
 
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  
+
   // Order form state
   const [orderForm, setOrderForm] = useState({
     order_id_marketplace: "",
@@ -170,16 +175,42 @@ export default function OrdersPage() {
     }
   };
 
-  // Filter orders based on search term
   const filteredOrders = useMemo(() => {
-    return Array.isArray(orders)
-      ? orders.filter(
-          (order) =>
-            order?.order_id_marketplace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order?.nama_pembeli?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : [];
-  }, [orders, searchTerm]);
+    if (!Array.isArray(orders)) return [];
+  
+    return orders.filter((order) => {
+      // 🔍 Search
+      const matchesSearch =
+        order?.order_id_marketplace
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        order?.nama_pembeli
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+  
+      // 📌 Status
+      const matchesStatus =
+        selectedStatus === "all" || order?.status === selectedStatus;
+  
+      // 📅 Tanggal
+      const orderDate = order?.created_at
+        ? new Date(order.created_at)
+        : null;
+  
+      const matchesStartDate =
+        !startDate || (orderDate && orderDate >= new Date(startDate));
+  
+      const matchesEndDate =
+        !endDate || (orderDate && orderDate <= new Date(endDate));
+  
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesStartDate &&
+        matchesEndDate
+      );
+    });
+  }, [orders, searchTerm, selectedStatus, startDate, endDate]);  
 
   // Paginate filtered orders
   const paginatedOrders = useMemo(() => {
@@ -223,25 +254,57 @@ export default function OrdersPage() {
 
         {/* Orders Section */}
         <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Daftar Order</CardTitle>
-                <CardDescription>Kelola semua order dari marketplace</CardDescription>
-              </div>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari order..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 w-64"
-                  />
-                </div>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            {/* KIRI */}
+            <div>
+              <CardTitle>Daftar Order</CardTitle>
+              <CardDescription>Kelola semua order dari marketplace</CardDescription>
+            </div>
+
+            {/* KANAN: Filter + Search */}
+            <div className="flex gap-2 items-center">
+              {/* Filter Status */}
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="border rounded px-2 py-1 text-sm"
+              >
+                <option value="all">Semua Status</option>
+                {Object.entries(ORDER_STATUSES).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+
+              {/* Filter Tanggal */}
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-36"
+              />
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-36"
+              />
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cari order..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 w-64"
+                />
               </div>
             </div>
-          </CardHeader>
+          </div>
+        </CardHeader>
           <CardContent>
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -261,6 +324,7 @@ export default function OrdersPage() {
                         <th className="p-2 text-left text-sm">Pembeli</th>
                         <th className="p-2 text-left text-sm">Platform</th>
                         <th className="p-2 text-left text-sm">Ekspedisi</th>
+                        <th className="p-2 text-left text-sm">Tanggal Pemesanan</th>
                         <th className="p-2 text-left text-sm">Status</th>
                         <th className="p-2 text-left text-sm">Total</th>
                         <th className="p-2 text-left text-sm">Aksi</th>
@@ -273,6 +337,7 @@ export default function OrdersPage() {
                         <td className="p-2">{order.nama_pembeli}</td>
                         <td className="p-2">{order.platform_penjualan}</td>
                         <td className="p-2">{order.expedisi}</td>
+                        <td className="p-2">{new Date(order.tanggal_pemesanan).toLocaleDateString("id-ID")}</td>
                         <td className="p-2">
                           <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status as OrderStatus)}`}>
                             {ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES] || order.status}

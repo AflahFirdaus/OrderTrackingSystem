@@ -43,15 +43,25 @@ NEXT_PUBLIC_APP_URL=https://your-project.vercel.app
 
 ### 4. Build Settings
 
-Vercel akan auto-detect:
-- **Framework Preset**: Next.js
-- **Build Command**: `pnpm build` (atau `npm run build`)
-- **Output Directory**: `.next`
-- **Install Command**: `pnpm install` (atau `npm install`)
+**IMPORTANT**: Untuk Next.js projects, Vercel mungkin mengabaikan `installCommand` di `vercel.json`. 
 
-Jika menggunakan pnpm, pastikan:
-- Vercel auto-detect pnpm dari `package.json`
-- Atau set **Install Command** ke `pnpm install`
+**Solusi**: Set Install Command manual di Vercel Dashboard:
+1. Buka Vercel Dashboard → Project Settings → General
+2. Scroll ke bagian "Build & Development Settings"
+3. Set **Install Command** ke: `pnpm install --frozen-lockfile`
+4. Set **Build Command** ke: `pnpm build`
+5. Set **Node.js Version** ke: `20.x`
+
+Atau gunakan konfigurasi di `vercel.json` (sudah dikonfigurasi):
+- **Framework Preset**: Next.js
+- **Build Command**: `pnpm build`
+- **Output Directory**: `.next` (auto-detect)
+- **Install Command**: `pnpm install --frozen-lockfile`
+- **Node Version**: 20.x
+
+**Catatan**:
+- File `package.json` sudah specify `packageManager: "pnpm@10.0.0"` untuk ensure version consistency
+- File `.npmrc` sudah dikonfigurasi dengan `production=false` untuk memastikan devDependencies terinstall
 
 ### 5. Deploy
 
@@ -82,10 +92,24 @@ Pastikan:
 
 ### Build Error
 
-Jika build error, cek:
-- Environment variables sudah di-set dengan benar
-- Dependencies sudah terinstall dengan benar
-- TypeScript errors (jika ada)
+Jika build error dengan `pnpm install`, cek:
+
+1. **Lock file**: Pastikan `pnpm-lock.yaml` sudah di-commit ke repository
+   ```bash
+   git add pnpm-lock.yaml
+   git commit -m "Add pnpm lock file"
+   git push
+   ```
+
+2. **Node.js version**: Pastikan menggunakan Node.js 20.x (sudah dikonfigurasi di `vercel.json`)
+
+3. **Dependencies**: Pastikan semua dependencies compatible
+   - React RC version mungkin perlu di-update ke stable jika ada masalah
+   - Cek Vercel Build Logs untuk error detail
+
+4. **Environment variables**: Pastikan semua env vars sudah di-set dengan benar
+
+5. **Sharp dependency**: Jika error terkait `sharp`, pastikan tidak di-ignore (sudah diperbaiki di `package.json`)
 
 ### Runtime Error
 
