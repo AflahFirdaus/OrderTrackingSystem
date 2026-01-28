@@ -1,5 +1,13 @@
 import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { queryOne } from "@/lib/Mysql/server";
+import type { RowDataPacket } from "mysql2/promise";
+
+interface User extends RowDataPacket {
+  id: string;
+  nama: string;
+  username: string;
+  role: string;
+}
 
 export async function getCurrentUser() {
   try {
@@ -10,14 +18,12 @@ export async function getCurrentUser() {
       return null;
     }
 
-    const supabase = await createClient();
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("id, nama, username, role")
-      .eq("id", userId)
-      .single();
+    const user = await queryOne<User>(
+      "SELECT id, nama, username, role FROM users WHERE id = ?",
+      [userId]
+    );
 
-    if (error || !user) {
+    if (!user) {
       return null;
     }
 

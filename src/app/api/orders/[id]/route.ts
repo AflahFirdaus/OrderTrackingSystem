@@ -1,8 +1,46 @@
-import { createClient } from "@/lib/supabase/server";
+import { query, queryOne, execute } from "@/lib/Mysql/server";
 import { requireAuth } from "@/lib/auth";
 import { canProcessOrder, getNextStatus } from "@/lib/constants";
 import { NextResponse } from "next/server";
 import type { OrderStatus, UserRole } from "@/types/database";
+import type { RowDataPacket } from "mysql2/promise";
+import crypto from "crypto";
+
+interface Order extends RowDataPacket {
+  id: string;
+  order_id_marketplace: string;
+  nama_pembeli: string;
+  platform_penjualan: string;
+  status: string;
+  tanggal_pemesanan: string;
+  total_harga: number;
+  keterangan: string | null;
+  expedisi: string;
+  resi: string | null;
+  qr_token: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OrderItem extends RowDataPacket {
+  id: string;
+  order_id: string;
+  nama_produk: string;
+  qty: number;
+  harga_satuan: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OrderWithItems extends Order {
+  order_items: OrderItem[];
+  created_by_user?: {
+    id: string;
+    nama: string;
+    username: string;
+  };
+}
 
 export async function GET(
   request: Request,
@@ -10,27 +48,37 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
 
-    const { data, error } = await supabase
-      .from("orders")
-      .select(`
-        *,
-        order_items (*),
-        created_by_user:users!orders_created_by_fkey (id, nama, username)
-      `)
-      .eq("id", id)
-      .single();
+    const order = await queryOne<Order>(
+      `SELECT o.*, u.id as created_by_user_id, u.nama as created_by_user_nama, u.username as created_by_user_username
+       FROM orders o
+       LEFT JOIN users u ON o.created_by = u.id
+       WHERE o.id = ?`,
+      [id]
+    );
 
-    if (error) {
-      throw error;
-    }
-
-    if (!data) {
+    if (!order) {
       return NextResponse.json({ error: "Order tidak ditemukan" }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    const items = await query<OrderItem[]>(
+      "SELECT * FROM order_items WHERE order_id = ?",
+      [id]
+    );
+
+    const orderWithItems: OrderWithItems = {
+      ...order,
+      order_items: items,
+      created_by_user: order.created_by_user_id
+        ? {
+            id: order.created_by_user_id as string,
+            nama: order.created_by_user_nama as string,
+            username: order.created_by_user_username as string,
+          }
+        : undefined,
+    };
+
+    return NextResponse.json(orderWithItems);
   } catch (error) {
     console.error("Error fetching order:", error);
     return NextResponse.json(
@@ -46,7 +94,6 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
     const body = await request.json();
 
     // Get current user
@@ -54,13 +101,12 @@ export async function PATCH(
     const userRole = currentUser.role as UserRole;
 
     // Get current order
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const order = await queryOne<Order>(
+      "SELECT * FROM orders WHERE id = ?",
+      [id]
+    );
 
-    if (orderError || !order) {
+    if (!order) {
       return NextResponse.json(
         { error: "Order tidak ditemukan" },
         { status: 404 }
@@ -99,28 +145,58 @@ export async function PATCH(
         }
       }
 
-      // Update order
-      const { data: updatedOrder, error: updateError } = await supabase
-        .from("orders")
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-          ...(body.expedisi && { expedisi: body.expedisi }),
-          ...(body.keterangan !== undefined && { keterangan: body.keterangan }),
-        })
-        .eq("id", id)
-        .select(`
-          *,
-          order_items (*),
-          created_by_user:users!orders_created_by_fkey (id, nama, username)
-        `)
-        .single();
+      // Build update SQL
+      const updateFields: string[] = ["status = ?"];
+      const updateParams: unknown[] = [newStatus];
 
-      if (updateError) {
-        throw updateError;
+      if (body.expedisi) {
+        updateFields.push("expedisi = ?");
+        updateParams.push(body.expedisi);
       }
 
-      return NextResponse.json(updatedOrder);
+      if (body.keterangan !== undefined) {
+        updateFields.push("keterangan = ?");
+        updateParams.push(body.keterangan);
+      }
+
+      updateParams.push(id);
+
+      await execute(
+        `UPDATE orders SET ${updateFields.join(", ")} WHERE id = ?`,
+        updateParams
+      );
+
+      // Fetch updated order
+      const updatedOrder = await queryOne<Order>(
+        `SELECT o.*, u.id as created_by_user_id, u.nama as created_by_user_nama, u.username as created_by_user_username
+         FROM orders o
+         LEFT JOIN users u ON o.created_by = u.id
+         WHERE o.id = ?`,
+        [id]
+      );
+
+      if (!updatedOrder) {
+        throw new Error("Failed to fetch updated order");
+      }
+
+      const items = await query<OrderItem[]>(
+        "SELECT * FROM order_items WHERE order_id = ?",
+        [id]
+      );
+
+      const orderWithItems: OrderWithItems = {
+        ...updatedOrder,
+        order_items: items,
+        created_by_user: updatedOrder.created_by_user_id
+          ? {
+              id: updatedOrder.created_by_user_id as string,
+              nama: updatedOrder.created_by_user_nama as string,
+              username: updatedOrder.created_by_user_username as string,
+            }
+          : undefined,
+      };
+
+      return NextResponse.json(orderWithItems);
     }
 
     // Update other fields (only admin)
@@ -130,12 +206,10 @@ export async function PATCH(
 
     // Validate order_id_marketplace uniqueness if being updated
     if (body.order_id_marketplace && body.order_id_marketplace !== order.order_id_marketplace) {
-      const { data: existingOrder } = await supabase
-        .from("orders")
-        .select("id, order_id_marketplace, nama_pembeli, status")
-        .eq("order_id_marketplace", body.order_id_marketplace)
-        .neq("id", id)
-        .single();
+      const existingOrder = await queryOne<Order>(
+        "SELECT id, order_id_marketplace, nama_pembeli, status FROM orders WHERE order_id_marketplace = ? AND id != ?",
+        [body.order_id_marketplace, id]
+      );
 
       if (existingOrder) {
         return NextResponse.json(
@@ -150,12 +224,10 @@ export async function PATCH(
 
     // Validate resi uniqueness if resi is being updated
     if (body.resi && body.resi.trim()) {
-      const { data: existingResi } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("resi", body.resi.trim())
-        .neq("id", id) // Exclude current order
-        .single();
+      const existingResi = await queryOne<Order>(
+        "SELECT id FROM orders WHERE resi = ? AND id != ?",
+        [body.resi.trim(), id]
+      );
 
       if (existingResi) {
         return NextResponse.json(
@@ -178,44 +250,65 @@ export async function PATCH(
     // Prepare order update data (exclude order_items from order update)
     const { order_items, ...orderUpdateData } = body;
     
-    // Update order
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from("orders")
-      .update({
-        ...orderUpdateData,
-        total_harga: calculatedTotalHarga !== undefined ? calculatedTotalHarga : orderUpdateData.total_harga,
-        resi: body.resi !== undefined ? (body.resi && body.resi.trim() ? body.resi.trim() : null) : undefined,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select(`
-        *,
-        order_items (*),
-        created_by_user:users!orders_created_by_fkey (id, nama, username)
-      `)
-      .single();
+    // Build update SQL dynamically
+    const updateFields: string[] = [];
+    const updateParams: unknown[] = [];
 
-    if (updateError) {
-      throw updateError;
+    if (orderUpdateData.order_id_marketplace !== undefined) {
+      updateFields.push("order_id_marketplace = ?");
+      updateParams.push(orderUpdateData.order_id_marketplace);
+    }
+    if (orderUpdateData.nama_pembeli !== undefined) {
+      updateFields.push("nama_pembeli = ?");
+      updateParams.push(orderUpdateData.nama_pembeli);
+    }
+    if (orderUpdateData.platform_penjualan !== undefined) {
+      updateFields.push("platform_penjualan = ?");
+      updateParams.push(orderUpdateData.platform_penjualan);
+    }
+    if (orderUpdateData.tanggal_pemesanan !== undefined) {
+      updateFields.push("tanggal_pemesanan = ?");
+      updateParams.push(orderUpdateData.tanggal_pemesanan);
+    }
+    if (calculatedTotalHarga !== undefined) {
+      updateFields.push("total_harga = ?");
+      updateParams.push(calculatedTotalHarga);
+    }
+    if (orderUpdateData.keterangan !== undefined) {
+      updateFields.push("keterangan = ?");
+      updateParams.push(orderUpdateData.keterangan);
+    }
+    if (orderUpdateData.expedisi !== undefined) {
+      updateFields.push("expedisi = ?");
+      updateParams.push(orderUpdateData.expedisi);
+    }
+    if (body.resi !== undefined) {
+      updateFields.push("resi = ?");
+      updateParams.push(body.resi && body.resi.trim() ? body.resi.trim() : null);
+    }
+
+    if (updateFields.length > 0) {
+      updateParams.push(id);
+      await execute(
+        `UPDATE orders SET ${updateFields.join(", ")} WHERE id = ?`,
+        updateParams
+      );
     }
 
     // Update order_items if provided
     if (order_items && Array.isArray(order_items)) {
       // Delete existing order items
-      const { error: deleteError } = await supabase
-        .from("order_items")
-        .delete()
-        .eq("order_id", id);
-
-      if (deleteError) {
-        throw deleteError;
-      }
+      await execute(
+        "DELETE FROM order_items WHERE order_id = ?",
+        [id]
+      );
 
       // Insert new order items
       if (order_items.length > 0) {
         const itemsToInsert = order_items
           .filter((item: any) => item.nama_produk && item.qty && item.harga_satuan)
           .map((item: any) => ({
+            id: crypto.randomUUID(),
             order_id: id,
             nama_produk: item.nama_produk,
             qty: parseInt(item.qty),
@@ -223,29 +316,55 @@ export async function PATCH(
           }));
 
         if (itemsToInsert.length > 0) {
-          const { error: itemsError } = await supabase
-            .from("order_items")
-            .insert(itemsToInsert);
+          const insertItemsSql = `
+            INSERT INTO order_items (id, order_id, nama_produk, qty, harga_satuan)
+            VALUES ${itemsToInsert.map(() => "(?, ?, ?, ?, ?)").join(", ")}
+          `;
+          
+          const itemsParams = itemsToInsert.flatMap(item => [
+            item.id,
+            item.order_id,
+            item.nama_produk,
+            item.qty,
+            item.harga_satuan,
+          ]);
 
-          if (itemsError) {
-            throw itemsError;
-          }
+          await execute(insertItemsSql, itemsParams);
         }
       }
     }
 
     // Fetch complete updated order with items
-    const { data: completeOrder } = await supabase
-      .from("orders")
-      .select(`
-        *,
-        order_items (*),
-        created_by_user:users!orders_created_by_fkey (id, nama, username)
-      `)
-      .eq("id", id)
-      .single();
+    const completeOrder = await queryOne<Order>(
+      `SELECT o.*, u.id as created_by_user_id, u.nama as created_by_user_nama, u.username as created_by_user_username
+       FROM orders o
+       LEFT JOIN users u ON o.created_by = u.id
+       WHERE o.id = ?`,
+      [id]
+    );
 
-    return NextResponse.json(completeOrder);
+    if (!completeOrder) {
+      throw new Error("Failed to fetch updated order");
+    }
+
+    const items = await query<OrderItem[]>(
+      "SELECT * FROM order_items WHERE order_id = ?",
+      [id]
+    );
+
+    const orderWithItems: OrderWithItems = {
+      ...completeOrder,
+      order_items: items,
+      created_by_user: completeOrder.created_by_user_id
+        ? {
+            id: completeOrder.created_by_user_id as string,
+            nama: completeOrder.created_by_user_nama as string,
+            username: completeOrder.created_by_user_username as string,
+          }
+        : undefined,
+    };
+
+    return NextResponse.json(orderWithItems);
   } catch (error: any) {
     console.error("Error updating order:", error);
     return NextResponse.json(

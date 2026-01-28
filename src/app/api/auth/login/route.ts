@@ -1,5 +1,14 @@
-import { createClient } from "@/lib/supabase/server";
+import { queryOne } from "@/lib/Mysql/server";
 import { NextResponse } from "next/server";
+import type { RowDataPacket } from "mysql2/promise";
+
+interface User extends RowDataPacket {
+  id: string;
+  nama: string;
+  username: string;
+  password: string;
+  role: string;
+}
 
 export async function POST(request: Request) {
   try {
@@ -12,36 +21,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    const userData = await queryOne<User>(
+      "SELECT * FROM users WHERE username = ?",
+      [username]
+    );
 
-    // Cari user berdasarkan username di tabel users
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("id, nama, username, password, role")
-      .eq("username", username)
-      .single();
-
-    if (userError) {
-      console.error("Database error saat login:", userError);
-      
-      // Check if table doesn't exist
-      if (userError.code === "PGRST116" || userError.message?.includes("relation") || userError.message?.includes("does not exist")) {
-        return NextResponse.json(
-          { 
-            error: "Database table 'users' tidak ditemukan. Pastikan Anda sudah menjalankan DATABASE_SCHEMA.sql di Supabase.",
-            details: userError.message 
-          },
-          { status: 500 }
-        );
-      }
-      
-      return NextResponse.json(
-        { error: "Username atau password salah", details: userError.message },
-        { status: 401 }
-      );
-    }
-
-    if (!user) {
+    if (!userData) {
       return NextResponse.json(
         { error: "Username atau password salah" },
         { status: 401 }
@@ -49,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     // Verifikasi password (plain text comparison untuk internal company)
-    if (user.password !== password) {
+    if (userData.password !== password) {
       return NextResponse.json(
         { error: "Username atau password salah" },
         { status: 401 }
@@ -59,22 +44,22 @@ export async function POST(request: Request) {
     // Set session cookie dengan user data
     const response = NextResponse.json({
       user: {
-        id: user.id,
-        nama: user.nama,
-        username: user.username,
-        role: user.role,
+        id: userData.id,
+        nama: userData.nama,
+        username: userData.username,
+        role: userData.role,
       },
     });
 
     // Set cookie untuk session (simpan user_id dan role)
-    response.cookies.set("user_id", user.id, {
+    response.cookies.set("user_id", userData.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
-    response.cookies.set("user_role", user.role, {
+    response.cookies.set("user_role", userData.role, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -86,11 +71,11 @@ export async function POST(request: Request) {
     console.error("Login error:", error);
     
     // Check if it's an environment variable error
-    if (error.message?.includes("Missing Supabase")) {
+    if (error.message?.includes("Missing Mysql")) {
       return NextResponse.json(
         { 
           error: error.message,
-          hint: "Buat file .env.local di root project dengan NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          hint: "Buat file .env.local di root project dengan MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, dan MYSQL_DATABASE"
         },
         { status: 500 }
       );

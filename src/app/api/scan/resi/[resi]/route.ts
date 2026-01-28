@@ -1,7 +1,38 @@
-import { createClient } from "@/lib/supabase/server";
+import { query, queryOne, execute } from "@/lib/Mysql/server";
 import { requireAdmin } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import type { OrderStatus } from "@/types/database";
+import type { RowDataPacket } from "mysql2/promise";
+
+interface Order extends RowDataPacket {
+  id: string;
+  order_id_marketplace: string;
+  nama_pembeli: string;
+  platform_penjualan: string;
+  status: string;
+  tanggal_pemesanan: string;
+  total_harga: number;
+  keterangan: string | null;
+  expedisi: string;
+  resi: string | null;
+  qr_token: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  created_by_user_id?: string;
+  created_by_user_nama?: string;
+  created_by_user_username?: string;
+}
+
+interface OrderItem extends RowDataPacket {
+  id: string;
+  order_id: string;
+  nama_produk: string;
+  qty: number;
+  harga_satuan: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export async function GET(
   request: Request,
@@ -12,7 +43,6 @@ export async function GET(
     await requireAdmin();
 
     const { resi } = await params;
-    const supabase = await createClient();
 
     if (!resi || !resi.trim()) {
       return NextResponse.json(
@@ -22,22 +52,37 @@ export async function GET(
     }
 
     // Find order by resi
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select(`
-        *,
-        order_items (*),
-        created_by_user:users!orders_created_by_fkey (id, nama, username)
-      `)
-      .eq("resi", resi.trim())
-      .single();
+    const order = await queryOne<Order>(
+      `SELECT o.*, u.id as created_by_user_id, u.nama as created_by_user_nama, u.username as created_by_user_username
+       FROM orders o
+       LEFT JOIN users u ON o.created_by = u.id
+       WHERE o.resi = ?`,
+      [resi.trim()]
+    );
 
-    if (orderError || !order) {
+    if (!order) {
       return NextResponse.json(
         { error: "Resi tidak ditemukan" },
         { status: 404 }
       );
     }
+
+    const items = await query<OrderItem[]>(
+      "SELECT * FROM order_items WHERE order_id = ?",
+      [order.id]
+    );
+
+    const orderWithItems = {
+      ...order,
+      order_items: items,
+      created_by_user: order.created_by_user_id
+        ? {
+            id: order.created_by_user_id,
+            nama: order.created_by_user_nama,
+            username: order.created_by_user_username,
+          }
+        : undefined,
+    };
 
     // Validate order status
     const currentStatus = order.status as OrderStatus;
@@ -55,14 +100,14 @@ export async function GET(
       return NextResponse.json(
         { 
           error: `Order dengan status ${currentStatus} tidak dapat diubah ulang menjadi PACKING`,
-          order 
+          order: orderWithItems
         },
         { status: 400 }
       );
     }
 
     return NextResponse.json({
-      order,
+      order: orderWithItems,
       canProcess: true,
     });
   } catch (error: any) {
@@ -91,7 +136,6 @@ export async function POST(
     await requireAdmin();
 
     const { resi } = await params;
-    const supabase = await createClient();
 
     if (!resi || !resi.trim()) {
       return NextResponse.json(
@@ -101,13 +145,12 @@ export async function POST(
     }
 
     // Find order by resi
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("resi", resi.trim())
-      .single();
+    const order = await queryOne<Order>(
+      "SELECT * FROM orders WHERE resi = ?",
+      [resi.trim()]
+    );
 
-    if (orderError || !order) {
+    if (!order) {
       return NextResponse.json(
         { error: "Resi tidak ditemukan" },
         { status: 404 }
@@ -137,27 +180,44 @@ export async function POST(
     }
 
     // Update order status to PACKING
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from("orders")
-      .update({
-        status: "PACKING",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id)
-      .select(`
-        *,
-        order_items (*),
-        created_by_user:users!orders_created_by_fkey (id, nama, username)
-      `)
-      .single();
+    await execute(
+      "UPDATE orders SET status = 'PACKING' WHERE id = ?",
+      [order.id]
+    );
 
-    if (updateError) {
-      throw updateError;
+    // Fetch updated order
+    const updatedOrder = await queryOne<Order>(
+      `SELECT o.*, u.id as created_by_user_id, u.nama as created_by_user_nama, u.username as created_by_user_username
+       FROM orders o
+       LEFT JOIN users u ON o.created_by = u.id
+       WHERE o.id = ?`,
+      [order.id]
+    );
+
+    if (!updatedOrder) {
+      throw new Error("Failed to fetch updated order");
     }
+
+    const items = await query<OrderItem[]>(
+      "SELECT * FROM order_items WHERE order_id = ?",
+      [order.id]
+    );
+
+    const orderWithItems = {
+      ...updatedOrder,
+      order_items: items,
+      created_by_user: updatedOrder.created_by_user_id
+        ? {
+            id: updatedOrder.created_by_user_id,
+            nama: updatedOrder.created_by_user_nama,
+            username: updatedOrder.created_by_user_username,
+          }
+        : undefined,
+    };
 
     return NextResponse.json({
       success: true,
-      order: updatedOrder,
+      order: orderWithItems,
       message: "Order berhasil diproses. Status diubah menjadi PACKING.",
     });
   } catch (error: any) {

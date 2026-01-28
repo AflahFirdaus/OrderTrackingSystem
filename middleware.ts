@@ -1,4 +1,4 @@
-import { updateSession } from "@/lib/supabase/middleware";
+import { updateSession } from "@/lib/Mysql/auth";
 import { type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
