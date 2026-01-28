@@ -38,19 +38,11 @@ pnpm install
 pnpm dev
 ```
 
-## Deploy ke Production
-
-Lihat [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) untuk panduan deploy ke Vercel.
-
 ## Dokumentasi
 
 - [SETUP.md](./SETUP.md) - Panduan setup lengkap
-- [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) - Panduan deploy ke Vercel
-- [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) - Production readiness checklist
-- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Panduan troubleshooting
-- [DATABASE_SCHEMA.sql](./DATABASE_SCHEMA.sql) - Schema database
-- [MIGRATION_ADD_RESI.sql](./MIGRATION_ADD_RESI.sql) - Migration untuk menambah field resi
-- [FIX_RLS.sql](./FIX_RLS.sql) - Script untuk memperbaiki RLS policies
+- [DATABASE_SCHEMA_MYSQL.sql](./DATABASE_SCHEMA_MYSQL.sql) - Schema Database MYSQL
+
 
 ## License
 
