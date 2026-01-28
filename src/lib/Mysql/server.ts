@@ -23,8 +23,16 @@ export async function query<T extends RowDataPacket[]>(
   sql: string,
   params?: unknown[]
 ): Promise<T> {
-  const [rows] = await pool.query<T>(sql, sanitizeParams(params));
-  return rows;
+  try {
+    const [rows] = await pool.query<T>(sql, sanitizeParams(params));
+    return rows;
+  } catch (error: any) {
+    // Re-throw with more context
+    if (error.message?.includes("Missing MySQL") || error.message?.includes("Missing DATABASE")) {
+      throw error;
+    }
+    throw new Error(`Database query error: ${error.message || error.toString()}`);
+  }
 }
 
 export async function queryOne<T extends RowDataPacket>(
@@ -36,11 +44,23 @@ export async function queryOne<T extends RowDataPacket>(
 }
 
 export async function execute(sql: string, params?: unknown[]): Promise<ResultSetHeader> {
-  const sanitized = sanitizeParams(params);
-  if (!sanitized) {
-    const [result] = await pool.execute<ResultSetHeader>(sql);
+  try {
+    const sanitized = sanitizeParams(params);
+    if (!sanitized) {
+      const [result] = await pool.execute<ResultSetHeader>(sql);
+      return result;
+    }
+    const [result] = await pool.execute<ResultSetHeader>(sql, sanitized);
     return result;
+  } catch (error: any) {
+    // Re-throw with more context
+    if (error.message?.includes("Missing MySQL") || error.message?.includes("Missing DATABASE")) {
+      throw error;
+    }
+    if (error.message?.includes("undefined")) {
+      throw new Error(`Database execute error: Bind parameters must not contain undefined. To pass SQL NULL specify JS null. Original error: ${error.message}`);
+    }
+    throw new Error(`Database execute error: ${error.message || error.toString()}`);
   }
-  const [result] = await pool.execute<ResultSetHeader>(sql, sanitized);
-  return result;
 }
+

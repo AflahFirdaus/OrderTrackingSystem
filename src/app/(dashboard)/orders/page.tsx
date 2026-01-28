@@ -78,6 +78,24 @@ export default function OrdersPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/orders");
+      
+      // Check if response is OK and content type is JSON
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Error fetching orders:", res.status, errorText);
+        setOrders([]);
+        return;
+      }
+      
+      // Check content type
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        console.error("Invalid response type:", contentType, text.substring(0, 100));
+        setOrders([]);
+        return;
+      }
+      
       const data = await res.json();
       
       if (Array.isArray(data)) {
@@ -86,8 +104,12 @@ export default function OrdersPage() {
         console.error("Invalid orders data:", data);
         setOrders([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching orders:", error);
+      // If error is JSON parse error, show more helpful message
+      if (error.message?.includes("JSON") || error.message?.includes("<!DOCTYPE")) {
+        console.error("API returned non-JSON response. Check server logs for errors.");
+      }
       setOrders([]);
     } finally {
       setLoading(false);

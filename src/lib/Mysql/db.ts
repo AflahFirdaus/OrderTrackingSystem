@@ -1,5 +1,6 @@
 // lib/db.ts
 import mysql from "mysql2/promise";
+import type { RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -40,8 +41,42 @@ function getDatabaseConfig() {
   };
 }
 
-export const pool: mysql.Pool =
-  global.__mysqlPool ??
-  mysql.createPool(getDatabaseConfig());
+// Initialize pool - errors will be caught in API routes
+// If config is missing, error will be thrown and caught in API route handlers
+let _pool: mysql.Pool | null = null;
 
-if (process.env.NODE_ENV !== "production") global.__mysqlPool = pool;
+function initializePool(): mysql.Pool {
+  if (global.__mysqlPool) {
+    return global.__mysqlPool;
+  }
+  
+  if (!_pool) {
+    _pool = mysql.createPool(getDatabaseConfig());
+    if (process.env.NODE_ENV !== "production") {
+      global.__mysqlPool = _pool;
+    }
+  }
+  
+  return _pool;
+}
+
+// Try to initialize, but don't fail module load
+// Pool will be initialized on first use
+try {
+  _pool = initializePool();
+} catch (error) {
+  // Will be initialized on first use
+  console.warn("MySQL pool initialization deferred:", (error as Error).message);
+}
+
+// Export pool with getter that initializes on first access
+export const pool = new Proxy({} as mysql.Pool, {
+  get(target, prop) {
+    const actualPool = initializePool();
+    const value = (actualPool as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(actualPool);
+    }
+    return value;
+  }
+});
