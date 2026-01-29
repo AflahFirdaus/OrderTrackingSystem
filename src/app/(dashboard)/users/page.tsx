@@ -146,14 +146,14 @@ export default function UsersPage() {
 
   return (
     <Container>
-      <div className="p-6 space-y-6 relative">
+      <div className="p-4 tablet:p-6 space-y-4 tablet:space-y-6 relative">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 tablet:flex-row tablet:justify-between tablet:items-center">
           <div>
-            <h1 className="text-3xl font-bold">Users</h1>
-            <p className="text-muted-foreground">Kelola user sistem</p>
+            <h1 className="text-xl tablet:text-3xl font-bold">Users</h1>
+            <p className="text-sm text-muted-foreground">Kelola user sistem</p>
           </div>
-          <Button onClick={() => setShowUserForm(true)}>
+          <Button onClick={() => setShowUserForm(true)} size="sm" className="w-full tablet:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Tambah User
           </Button>
@@ -162,8 +162,8 @@ export default function UsersPage() {
         {/* Users Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Daftar User</CardTitle>
-            <CardDescription>Kelola user sistem</CardDescription>
+            <CardTitle className="text-lg">Daftar User</CardTitle>
+            <CardDescription>Data user sistem</CardDescription>
           </CardHeader>
           <CardContent>
             {!Array.isArray(users) || users.length === 0 ? (
@@ -171,28 +171,28 @@ export default function UsersPage() {
                 Belum ada user
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto -mx-4 tablet:mx-0">
+                <table className="w-full min-w-[320px]">
                   <thead>
                     <tr className="border-b">
-                      <th className="p-2 text-left text-sm">Nama</th>
-                      <th className="p-2 text-left text-sm">Username</th>
-                      <th className="p-2 text-left text-sm">Role</th>
-                      <th className="p-2 text-left text-sm">Aksi</th>
+                      <th className="p-2 text-left text-xs tablet:text-sm">Nama</th>
+                      <th className="p-2 text-left text-xs tablet:text-sm">Username</th>
+                      <th className="p-2 text-left text-xs tablet:text-sm">Role</th>
+                      <th className="p-2 text-left text-xs tablet:text-sm">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.map((user) => (
                       <tr key={user.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{user.nama}</td>
-                        <td className="p-2">{user.username}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{user.nama}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{user.username}</td>
                         <td className="p-2">
-                          <span className="px-2 py-1 rounded text-xs bg-muted">
+                          <span className="inline-block px-2 py-1 rounded text-xs bg-muted">
                             {user.role}
                           </span>
                         </td>
                         <td className="p-2">
-                          <div className="flex gap-2">
+                          <div className="flex gap-1 flex-wrap">
                             <Button
                               size="sm"
                               variant="outline"

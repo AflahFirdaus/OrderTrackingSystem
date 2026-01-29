@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Container from "@/components/container";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { ORDER_STATUSES } from "@/lib/constants";
 import type { OrderWithItems } from "@/types/database";
@@ -46,14 +47,6 @@ export default function PackingPage() {
     checkAuth();
   }, [router]);
 
-  const handleScanSuccess = async (scannedResi: string) => {
-    setShowScanner(false);
-    setResi(scannedResi);
-    
-    // Auto process after getting resi from camera
-    await processResi(scannedResi);
-  };
-
   const processResi = async (resiToProcess: string) => {
     if (!resiToProcess || !resiToProcess.trim()) {
       setError("Resi tidak boleh kosong");
@@ -93,6 +86,12 @@ export default function PackingPage() {
     }
   };
 
+  const handleScanSuccess = async (scannedResi: string) => {
+    setShowScanner(false);
+    setResi(scannedResi);
+    await processResi(scannedResi);
+  };
+
   const handleScan = async (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
@@ -108,21 +107,23 @@ export default function PackingPage() {
 
   if (currentUser?.role !== "admin") {
     return (
-      <div className="container mx-auto p-6">
-        <p>Anda tidak memiliki akses ke halaman ini.</p>
-      </div>
+      <Container>
+        <div className="p-4 tablet:p-6">
+          <p>Anda tidak memiliki akses ke halaman ini.</p>
+        </div>
+      </Container>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <Container>
+      <div className="p-4 tablet:p-6 space-y-4 tablet:space-y-6 relative">
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-2">
-          <PackageCheck className="h-8 w-8" />
           Packing via Scan Resi
         </h1>
         <p className="text-muted-foreground">
-          Scan barcode resi untuk mengubah status order menjadi PACKING
+          Scan barcode resi dengan kamera atau ketik nomor resi untuk mengubah status order menjadi PACKING
         </p>
       </div>
 
@@ -130,7 +131,7 @@ export default function PackingPage() {
         <CardHeader>
           <CardTitle>Input Resi</CardTitle>
           <CardDescription>
-            Masukkan nomor resi atau scan barcode resi
+            Buka kamera untuk scan barcode resi atau ketik manual nomor resi
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -148,11 +149,12 @@ export default function PackingPage() {
             <div className="flex gap-2">
               <Input
                 type="text"
-                placeholder="Masukkan nomor resi atau scan barcode"
+                placeholder="Nomor resi (scan atau ketik)"
                 value={resi}
                 onChange={(e) => setResi(e.target.value)}
                 disabled={loading}
                 className="flex-1"
+                autoFocus
               />
               <Button
                 type="button"
@@ -283,6 +285,7 @@ export default function PackingPage() {
           onClose={() => setShowScanner(false)}
         />
       )}
-    </div>
+      </div>
+    </Container>
   );
 }

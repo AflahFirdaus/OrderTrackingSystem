@@ -60,11 +60,11 @@ export function Pagination({
   };
 
   return (
-    <div className="flex items-center justify-between border-t pt-4 mt-4">
-      <div className="text-sm text-muted-foreground">
-        Menampilkan {startItem} - {endItem} dari {totalItems} order
+    <div className="flex flex-col gap-3 tablet:flex-row tablet:items-center tablet:justify-between border-t pt-4 mt-4">
+      <div className="text-xs tablet:text-sm text-muted-foreground order-2 tablet:order-1">
+        Menampilkan {startItem}–{endItem} dari {totalItems} order
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center tablet:justify-end gap-2 order-1 tablet:order-2">
         <Button
           variant="outline"
           size="sm"
@@ -72,10 +72,9 @@ export function Pagination({
           disabled={currentPage === 1}
         >
           <ChevronLeft className="h-4 w-4" />
-          Sebelumnya
+          <span className="hidden xs:inline sm:inline">Sebelumnya</span>
         </Button>
-
-        <div className="flex items-center gap-1">
+        <div className="hidden tablet:flex items-center gap-1">
           {getPageNumbers().map((page, index) => {
             if (page === "...") {
               return (
@@ -84,7 +83,6 @@ export function Pagination({
                 </span>
               );
             }
-
             const pageNum = page as number;
             return (
               <Button
@@ -92,22 +90,24 @@ export function Pagination({
                 variant={currentPage === pageNum ? "default" : "outline"}
                 size="sm"
                 onClick={() => onPageChange(pageNum)}
-                className="min-w-[40px]"
+                className="min-w-[36px]"
               >
                 {pageNum}
               </Button>
             );
           })}
         </div>
-
+        <span className="tablet:hidden text-sm text-muted-foreground px-1">
+          {currentPage} / {totalPages}
+        </span>
         <Button
           variant="outline"
           size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
         >
-          Selanjutnya
-          <ChevronRight className="h-4 w-4" />
+          <span className="hidden sm:inline">Selanjutnya</span>
+          <ChevronRight className="h-4 w-4 sm:ml-1" />
         </Button>
       </div>
     </div>

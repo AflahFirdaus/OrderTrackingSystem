@@ -27,16 +27,41 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
+      let data: { user?: { role: string }; error?: string; details?: string; hint?: string } = {};
+      const contentType = response.headers.get("content-type");
+      const isJson = contentType?.includes("application/json");
 
-      if (!response.ok) {
-        // Tampilkan error message yang lebih detail
-        const errorMessage = data.error || data.details || "Login gagal";
-        console.error("Login error:", data);
-        throw new Error(errorMessage);
+      if (isJson) {
+        try {
+          data = await response.json();
+        } catch {
+          setError("Respons server tidak valid. Coba lagi.");
+          return;
+        }
+      } else if (!response.ok) {
+        setError(
+          response.status >= 500
+            ? "Server error. Periksa koneksi database dan file .env (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE)."
+            : "Login gagal."
+        );
+        return;
       }
 
-      // Redirect based on role
+      if (!response.ok) {
+        const errorMessage =
+          data.error ||
+          data.details ||
+          data.hint ||
+          (response.status === 401 ? "Username atau password salah" : "Login gagal");
+        setError(errorMessage);
+        return;
+      }
+
+      if (!data.user?.role) {
+        setError("Respons login tidak lengkap. Coba lagi.");
+        return;
+      }
+
       if (data.user.role === "admin") {
         router.push("/");
       } else if (data.user.role === "gudang" || data.user.role === "packing") {
@@ -46,16 +71,17 @@ export default function LoginPage() {
       }
 
       router.refresh();
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan saat login");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Terjadi kesalahan saat login";
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-background p-3 sm:p-4">
+      <Card className="w-full max-w-md min-w-0 mx-2">
         <CardHeader>
           <CardTitle>Login</CardTitle>
           <CardDescription>

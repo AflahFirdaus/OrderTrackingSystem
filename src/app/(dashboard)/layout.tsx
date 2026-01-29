@@ -9,9 +9,9 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-[100dvh]">
       <SideNav />
-      <div className="flex-grow overflow-auto">
+      <div className="flex-grow overflow-auto min-w-0">
         <TopNavDynamic />
-        <main>{children}</main>
+        <main className="pl-12 tablet:pl-0">{children}</main>
       </div>
     </div>
   );

@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input";
 import Container from "@/components/container";
 import { ORDER_STATUSES, getStatusColor } from "@/lib/constants";
 import type { OrderWithItems, User, OrderStatus } from "@/types/database";
-import { QRCodeSVG } from "qrcode.react";
+import Barcode from "react-barcode";
 import { getQrUrl } from "@/lib/utils/qr-token";
 import { downloadReceipt } from "@/lib/utils/generate-receipt";
 import { SidebarForm } from "@/components/sidebar-form";
 import { AlertModal } from "@/components/alert-modal";
 import { Pagination } from "@/components/pagination";
-import { Plus, Search, Download, X, FileText, Edit } from "lucide-react";
+import { Plus, Search, Download, X, FileText, Edit, ChevronUp, ChevronDown } from "lucide-react";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
@@ -34,6 +34,7 @@ export default function OrdersPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc"); // desc = terbaru dulu, asc = terlama dulu
   
 
   // Order form state
@@ -74,10 +75,11 @@ export default function OrdersPage() {
     checkAuthAndFetch();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (sort?: "desc" | "asc") => {
     setLoading(true);
     try {
-      const res = await fetch("/api/orders");
+      const sortParam = sort ?? sortOrder;
+      const res = await fetch(`/api/orders?sort=${sortParam}`);
       
       // Check if response is OK and content type is JSON
       if (!res.ok) {
@@ -275,16 +277,18 @@ export default function OrdersPage() {
       const matchesStatus =
         selectedStatus === "all" || order?.status === selectedStatus;
   
-      // 📅 Tanggal
-      const orderDate = order?.created_at
-        ? new Date(order.created_at)
-        : null;
-  
-      const matchesStartDate =
-        !startDate || (orderDate && orderDate >= new Date(startDate));
-  
-      const matchesEndDate =
-        !endDate || (orderDate && orderDate <= new Date(endDate));
+      // 📅 Filter by Tanggal Pemesanan (normalisasi ke YYYY-MM-DD agar timezone/format konsisten)
+      let orderDateStr = "";
+      if (order?.tanggal_pemesanan) {
+        const d = new Date(order.tanggal_pemesanan);
+        if (!isNaN(d.getTime())) {
+          orderDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        }
+      }
+      const startNorm = startDate ? startDate.slice(0, 10) : "";
+      const endNorm = endDate ? endDate.slice(0, 10) : "";
+      const matchesStartDate = !startNorm || (orderDateStr && orderDateStr >= startNorm);
+      const matchesEndDate = !endNorm || (orderDateStr && orderDateStr <= endNorm);
   
       return (
         matchesSearch &&
@@ -305,10 +309,10 @@ export default function OrdersPage() {
   // Calculate total pages
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
 
-  // Reset to page 1 when search term changes
+  // Reset to page 1 when filter berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, selectedStatus, startDate, endDate]);
 
   if (currentUser?.role !== "admin") {
     return (
@@ -322,14 +326,14 @@ export default function OrdersPage() {
 
   return (
     <Container>
-      <div className="p-6 space-y-6 relative">
+      <div className="p-4 tablet:p-6 space-y-4 tablet:space-y-6 relative">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 tablet:flex-row tablet:justify-between tablet:items-center">
           <div>
-            <h1 className="text-3xl font-bold">Orders</h1>
-            <p className="text-muted-foreground">Kelola semua order dari marketplace</p>
+            <h1 className="text-xl tablet:text-3xl font-bold">Orders</h1>
+            <p className="text-sm text-muted-foreground">Kelola semua order dari marketplace</p>
           </div>
-          <Button onClick={() => setShowOrderForm(true)}>
+          <Button onClick={() => setShowOrderForm(true)} size="sm" className="w-full tablet:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Tambah Order
           </Button>
@@ -337,21 +341,19 @@ export default function OrdersPage() {
 
         {/* Orders Section */}
         <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            {/* KIRI */}
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 tablet:flex-row tablet:justify-between tablet:items-start">
             <div>
-              <CardTitle>Daftar Order</CardTitle>
-              <CardDescription>Kelola semua order dari marketplace</CardDescription>
+              <CardTitle className="text-lg">Daftar Order</CardTitle>
+              <CardDescription>Data semua order dari marketplace</CardDescription>
             </div>
 
-            {/* KANAN: Filter + Search */}
-            <div className="flex gap-2 items-center">
-              {/* Filter Status */}
+            {/* Filter + Search - wrap on mobile */}
+            <div className="flex flex-wrap gap-2 items-center w-full tablet:w-auto min-w-0">
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="border rounded px-2 py-1 text-sm"
+                className="border rounded px-2 py-1.5 text-sm flex-1 min-w-[120px] tablet:flex-none"
               >
                 <option value="all">Semua Status</option>
                 {Object.entries(ORDER_STATUSES).map(([key, label]) => (
@@ -360,29 +362,27 @@ export default function OrdersPage() {
                   </option>
                 ))}
               </select>
-
-              {/* Filter Tanggal */}
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-36"
+                className="w-full tablet:w-36 text-sm"
+                title="Tanggal pemesanan dari"
               />
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-36"
+                className="w-full tablet:w-36 text-sm"
+                title="Tanggal pemesanan sampai"
               />
-
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <div className="relative flex-1 min-w-[140px] tablet:flex-none tablet:w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   placeholder="Cari order..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 w-64"
+                  className="pl-8 w-full"
                 />
               </div>
             </div>
@@ -399,51 +399,63 @@ export default function OrdersPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-4 tablet:mx-0">
+                  <table className="w-full min-w-[640px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="p-2 text-left text-sm">Order ID</th>
-                        <th className="p-2 text-left text-sm">Pembeli</th>
-                        <th className="p-2 text-left text-sm">Platform</th>
-                        <th className="p-2 text-left text-sm">Ekspedisi</th>
-                        <th className="p-2 text-left text-sm">Tanggal Pemesanan</th>
-                        <th className="p-2 text-left text-sm">Status</th>
-                        <th className="p-2 text-left text-sm">Total</th>
-                        <th className="p-2 text-left text-sm">Aksi</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Order ID</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Pembeli</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Platform</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Ekspedisi</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">
+                          <span className="inline-flex items-center gap-0.5">
+                            Tanggal
+                            <span className="inline-flex flex-col ml-0.5">
+                              <button
+                                type="button"
+                                onClick={() => { setSortOrder("asc"); fetchOrders("asc"); }}
+                                className={`p-0.5 rounded hover:bg-muted ${sortOrder === "asc" ? "text-foreground bg-muted/50" : "text-muted-foreground"}`}
+                                title="Terlama dulu"
+                                aria-label="Sortir terlama dulu"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setSortOrder("desc"); fetchOrders("desc"); }}
+                                className={`p-0.5 rounded hover:bg-muted -mt-0.5 ${sortOrder === "desc" ? "text-foreground bg-muted/50" : "text-muted-foreground"}`}
+                                title="Terbaru dulu"
+                                aria-label="Sortir terbaru dulu"
+                              >
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                          </span>
+                        </th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Status</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Total</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Aksi</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedOrders.map((order) => (
                       <tr key={order.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{order.order_id_marketplace}</td>
-                        <td className="p-2">{order.nama_pembeli}</td>
-                        <td className="p-2">{order.platform_penjualan}</td>
-                        <td className="p-2">{order.expedisi}</td>
-                        <td className="p-2">{new Date(order.tanggal_pemesanan).toLocaleDateString("id-ID")}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.order_id_marketplace}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.nama_pembeli}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.platform_penjualan}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.expedisi}</td>
+                        <td className="p-2 text-xs tablet:text-sm whitespace-nowrap">{new Date(order.tanggal_pemesanan).toLocaleDateString("id-ID")}</td>
                         <td className="p-2">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status as OrderStatus)}`}>
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status as OrderStatus)}`}>
                             {ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES] || order.status}
                           </span>
                         </td>
+                        <td className="p-2 text-xs tablet:text-sm whitespace-nowrap">Rp {Number(order.total_harga).toLocaleString("id-ID", { maximumFractionDigits: 0 })}</td>
                         <td className="p-2">
-                          Rp {order.total_harga.toLocaleString("id-ID")}
-                        </td>
-                        <td className="p-2">
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setSelectedOrder(order)}
-                            >
-                              Detail
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEditOrder(order)}
-                            >
-                              <Edit className="h-4 w-4" />
+                          <div className="flex gap-1 flex-wrap">
+                            <Button size="sm" variant="outline" onClick={() => setSelectedOrder(order)} className="text-xs">Detail</Button>
+                            <Button size="sm" variant="outline" onClick={() => handleEditOrder(order)} className="shrink-0">
+                              <Edit className="h-3.5 w-3.5 tablet:h-4 tablet:w-4" />
                             </Button>
                           </div>
                         </td>
@@ -468,22 +480,22 @@ export default function OrdersPage() {
 
         {/* Order Detail Modal */}
         {selectedOrder && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Detail Order</CardTitle>
-                    <CardDescription>{selectedOrder.order_id_marketplace}</CardDescription>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 tablet:p-4 overflow-y-auto">
+            <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto my-auto">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg tablet:text-xl truncate">Detail Order</CardTitle>
+                    <CardDescription className="truncate">{selectedOrder.order_id_marketplace}</CardDescription>
                   </div>
-                  <Button variant="ghost" onClick={() => setSelectedOrder(null)}>
+                  <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(null)} className="shrink-0">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
+              <CardContent className="space-y-4 pt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 tablet:grid-cols-3 gap-3 tablet:gap-4">
+                <div>
                     <p className="text-sm text-muted-foreground">Nama Pembeli</p>
                     <p className="font-medium">{selectedOrder.nama_pembeli}</p>
                   </div>
@@ -496,25 +508,29 @@ export default function OrdersPage() {
                     <p className="font-medium">{ORDER_STATUSES[selectedOrder.status]}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Resi</p>
-                    <p className="font-medium">{selectedOrder.resi || "-"}</p>
-                  </div>
-                  <div>
                     <p className="text-sm text-muted-foreground">Total Harga</p>
                     <p className="font-medium">
-                      Rp {selectedOrder.total_harga.toLocaleString("id-ID")}
+                      Rp {Number(selectedOrder.total_harga).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Tanggal Pemesanan</p>
+                    <p className="font-medium">{new Date(selectedOrder.tanggal_pemesanan).toLocaleDateString("id-ID")}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Ekspedisi</p>
                     <p className="font-medium">{selectedOrder.expedisi}</p>
                   </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Resi</p>
+                    <p className="font-medium">{selectedOrder.resi || "-"}</p>
+                  </div>
                 </div>
 
                 {selectedOrder.order_items && selectedOrder.order_items.length > 0 && (
-                  <div>
+                  <div className="overflow-x-auto">
                     <p className="text-sm font-medium mb-2">Item Order</p>
-                    <div className="border rounded-md">
+                    <div className="border rounded-md min-w-[280px]">
                       <table className="w-full">
                         <thead className="bg-muted">
                           <tr>
@@ -530,10 +546,10 @@ export default function OrdersPage() {
                               <td className="p-2">{item.nama_produk}</td>
                               <td className="p-2">{item.qty}</td>
                               <td className="p-2">
-                                Rp {item.harga_satuan.toLocaleString("id-ID")}
+                              Rp {Number(item.harga_satuan).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}
                               </td>
                               <td className="p-2">
-                                Rp {(item.qty * item.harga_satuan).toLocaleString("id-ID")}
+                                Rp {Number(item.qty * item.harga_satuan).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}
                               </td>
                             </tr>
                           ))}
@@ -544,23 +560,15 @@ export default function OrdersPage() {
                 )}
 
                 <div>
-                  <p className="text-sm font-medium mb-2">QR Code</p>
-                  <div className="flex items-center gap-4">
-                    <QRCodeSVG value={getQrUrl(selectedOrder.qr_token)} size={200} />
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground mb-2">QR Token:</p>
+                  <p className="text-sm font-medium mb-2">Barcode</p>
+                  <div className="flex flex-col tablet:flex-row tablet:items-center gap-3 tablet:gap-4">
+                    <div className="bg-white p-2 rounded border inline-block w-fit">
+                      <Barcode value={selectedOrder.qr_token} format="CODE128" width={1} height={32} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground mb-2">Kode Barcode:</p>
                       <p className="text-sm font-mono break-all mb-4">{selectedOrder.qr_token}</p>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            window.open(getQrUrl(selectedOrder.qr_token), "_blank");
-                          }}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Buka Link QR
-                        </Button>
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
                           variant="default"
@@ -580,8 +588,8 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
+                <div className="flex flex-col tablet:flex-row tablet:justify-between tablet:items-start gap-4">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium mb-2">Update Status</p>
                     <div className="flex gap-2 flex-wrap">
                       {Object.entries(ORDER_STATUSES).map(([status, label]) => (
@@ -602,7 +610,7 @@ export default function OrdersPage() {
                     size="sm"
                     variant="outline"
                     onClick={() => handleEditOrder(selectedOrder)}
-                    className="ml-4"
+                    className="w-full tablet:w-auto shrink-0"
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Order

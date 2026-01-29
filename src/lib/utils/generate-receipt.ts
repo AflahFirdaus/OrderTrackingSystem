@@ -2,7 +2,6 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import type { OrderWithItems } from "@/types/database";
 import { ORDER_STATUSES } from "@/lib/constants";
-import { getQrUrl } from "./qr-token";
 
 export async function downloadReceipt(order: OrderWithItems) {
   // Create a temporary div to render the receipt
@@ -16,8 +15,8 @@ export async function downloadReceipt(order: OrderWithItems) {
   receiptDiv.style.left = "-9999px";
   receiptDiv.style.top = "0";
 
-  // Generate QR Code SVG as data URL
-  const qrCodeUrl = await generateQRCodeDataURL(getQrUrl(order.qr_token));
+  // Generate Barcode image as data URL (CODE128, 10-20 char token)
+  const barcodeUrl = await generateBarcodeDataURL(order.qr_token);
 
   receiptDiv.innerHTML = `
     <div style="text-align: center; margin-bottom: 20px;">
@@ -72,8 +71,8 @@ export async function downloadReceipt(order: OrderWithItems) {
             <tr>
               <td style="padding: 8px; border: 1px solid #ddd;">${item.nama_produk}</td>
               <td style="text-align: center; padding: 8px; border: 1px solid #ddd;">${item.qty}</td>
-              <td style="text-align: right; padding: 8px; border: 1px solid #ddd;">Rp ${item.harga_satuan.toLocaleString("id-ID")}</td>
-              <td style="text-align: right; padding: 8px; border: 1px solid #ddd;">Rp ${(item.qty * item.harga_satuan).toLocaleString("id-ID")}</td>
+              <td style="text-align: right; padding: 8px; border: 1px solid #ddd;">Rp ${Number(item.harga_satuan).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}</td>
+              <td style="text-align: right; padding: 8px; border: 1px solid #ddd;">Rp ${Number(item.qty * item.harga_satuan).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}</td>
             </tr>
           `
           ).join("") || ""}
@@ -84,15 +83,15 @@ export async function downloadReceipt(order: OrderWithItems) {
     <div style="margin-bottom: 20px; text-align: right;">
       <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 2px solid #000; border-bottom: 2px solid #000;">
         <span style="font-size: 18px; font-weight: bold;">TOTAL:</span>
-        <span style="font-size: 18px; font-weight: bold;">Rp ${order.total_harga.toLocaleString("id-ID")}</span>
+        <span style="font-size: 18px; font-weight: bold;">Rp ${Number(order.total_harga).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}</span>
       </div>
     </div>
 
     <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 2px solid #000;">
-      <h2 style="font-size: 16px; margin-bottom: 15px;">QR Code untuk Tracking</h2>
-      <img src="${qrCodeUrl}" alt="QR Code" style="width: 150px; height: 150px; margin: 0 auto; display: block;" />
+      <h2 style="font-size: 16px; margin-bottom: 15px;">Barcode untuk Tracking</h2>
+      <img src="${barcodeUrl}" alt="Barcode" style="height: 52px; margin: 0 auto; display: block;" />
       <p style="margin-top: 10px; font-size: 12px; color: #666; word-break: break-all;">${order.qr_token}</p>
-      <p style="margin-top: 5px; font-size: 12px; color: #666;">Scan QR Code untuk tracking order</p>
+      <p style="margin-top: 5px; font-size: 12px; color: #666;">Scan barcode untuk tracking order</p>
     </div>
 
     <div style="margin-top: 30px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #ddd; padding-top: 10px;">
@@ -143,32 +142,19 @@ export async function downloadReceipt(order: OrderWithItems) {
   }
 }
 
-async function generateQRCodeDataURL(url: string): Promise<string> {
+async function generateBarcodeDataURL(value: string): Promise<string> {
   try {
-    const QRCode = await import("qrcode");
-    return new Promise((resolve, reject) => {
-      QRCode.toDataURL(
-        url,
-        {
-          width: 300,
-          margin: 2,
-          color: {
-            dark: "#000000",
-            light: "#FFFFFF",
-          },
-        },
-        (err: Error | null, dataUrl: string) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(dataUrl);
-          }
-        }
-      );
+    const JsBarcode = (await import("jsbarcode")).default;
+    const canvas = document.createElement("canvas");
+    JsBarcode(canvas, value, {
+      format: "CODE128",
+      width: 1.2,
+      height: 32,
+      displayValue: false,
     });
+    return canvas.toDataURL("image/png");
   } catch (error) {
-    console.error("Error generating QR code:", error);
-    // Return a placeholder if QR generation fails
-    return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RUiBDb2RlPC90ZXh0Pjwvc3ZnPg==";
+    console.error("Error generating barcode:", error);
+    return "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjUwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iNTAiIGZpbGw9IiNmNWY1ZjUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5OTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+QmFyY29kZTwvdGV4dD48L3N2Zz4=";
   }
 }

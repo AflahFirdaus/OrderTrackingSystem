@@ -46,6 +46,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const search = searchParams.get("search");
+    const sort = searchParams.get("sort"); // "asc" = terlama dulu, "desc" = terbaru dulu
 
     let sql = `
       SELECT 
@@ -70,7 +71,8 @@ export async function GET(request: Request) {
       params.push(searchPattern, searchPattern);
     }
 
-    sql += " ORDER BY o.created_at DESC";
+    const orderDir = sort === "asc" ? "ASC" : "DESC";
+    sql += ` ORDER BY o.created_at ${orderDir}`;
 
     let orders: Order[] = [];
     try {

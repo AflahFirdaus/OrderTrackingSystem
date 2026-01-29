@@ -7,14 +7,14 @@ import { Input } from "@/components/ui/input";
 import Container from "@/components/container";
 import { ORDER_STATUSES, getStatusColor } from "@/lib/constants";
 import type { OrderWithItems, User, PlatformPenjualan, OrderStatus } from "@/types/database";
-import { QRCodeSVG } from "qrcode.react";
+import Barcode from "react-barcode";
 import { getQrUrl } from "@/lib/utils/qr-token";
 import { downloadReceipt } from "@/lib/utils/generate-receipt";
 import { SidebarForm } from "@/components/sidebar-form";
 import { DeleteConfirmModal } from "@/components/delete-confirm-modal";
 import { AlertModal } from "@/components/alert-modal";
 import { Pagination } from "@/components/pagination";
-import { Plus, Search, Download, X, Edit, Trash2, Package, Users, DollarSign, ShoppingCart, FileText } from "lucide-react";
+import { Plus, Search, Download, X, Edit, Trash2, Package, Users, DollarSign, ShoppingCart, FileText, ChevronUp, ChevronDown } from "lucide-react";
 
 export default function DashboardPage() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
@@ -45,6 +45,7 @@ export default function DashboardPage() {
     totalOrderItems: 0,
     totalRevenue: 0,
   });
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc"); // desc = terbaru dulu, asc = terlama dulu
 
   // Order form state
   const [orderForm, setOrderForm] = useState({
@@ -103,10 +104,11 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (sort?: "desc" | "asc") => {
     setLoading(true);
     try {
-      const res = await fetch("/api/orders");
+      const sortParam = sort ?? sortOrder;
+      const res = await fetch(`/api/orders?sort=${sortParam}`);
       
       // Check if response is OK and content type is JSON
       if (!res.ok) {
@@ -149,13 +151,19 @@ export default function DashboardPage() {
   const fetchUsers = async () => {
     try {
       const res = await fetch("/api/users");
+      if (!res.ok) {
+        setUsers([]);
+        return;
+      }
+      const contentType = res.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        setUsers([]);
+        return;
+      }
       const data = await res.json();
-      
-      // Ensure data is always an array
       if (Array.isArray(data)) {
         setUsers(data);
       } else {
-        console.error("Invalid users data:", data);
         setUsers([]);
       }
     } catch (error) {
@@ -433,27 +441,23 @@ export default function DashboardPage() {
 
   return (
     <Container>
-      <div className="p-6 space-y-6 relative">
+      <div className="p-4 tablet:p-6 space-y-4 tablet:space-y-6 relative">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 tablet:flex-row tablet:justify-between tablet:items-center">
           <div>
-            <h1 className="text-3xl font-bold">Dashboard Admin</h1>
-            <p className="text-muted-foreground">Kelola order dan user</p>
+            <h1 className="text-xl tablet:text-3xl font-bold">Dashboard Admin</h1>
+            <p className="text-sm text-muted-foreground">Kelola order dan user</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowOrderForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setShowOrderForm(true)} size="sm" className="flex-1 tablet:flex-none min-w-0">
+              <Plus className="h-4 w-4 mr-2 shrink-0" />
               Tambah Order
-            </Button>
-            <Button onClick={() => setShowUserForm(true)} variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Tambah User
             </Button>
           </div>
         </div>
 
         {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 tablet:grid-cols-2 laptop:grid-cols-4 gap-3 tablet:gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Order</CardTitle>
@@ -503,22 +507,20 @@ export default function DashboardPage() {
 
         {/* Orders Section */}
         <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
+          <CardHeader className="space-y-4">
+            <div className="flex flex-col gap-4 tablet:flex-row tablet:justify-between tablet:items-start">
               <div>
-                <CardTitle>Daftar Order</CardTitle>
+                <CardTitle className="text-lg">Daftar Order</CardTitle>
                 <CardDescription>Kelola semua order dari marketplace</CardDescription>
               </div>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Cari order..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 w-64"
-                  />
-                </div>
+              <div className="relative w-full tablet:w-auto min-w-0">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Cari order..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8 w-full tablet:w-64"
+                />
               </div>
             </div>
           </CardHeader>
@@ -533,40 +535,65 @@ export default function DashboardPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-4 tablet:mx-0">
+                  <table className="w-full min-w-[640px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="p-2 text-left text-sm">Order ID</th>
-                        <th className="p-2 text-left text-sm">Pembeli</th>
-                        <th className="p-2 text-left text-sm">Platform</th>
-                        <th className="p-2 text-left text-sm">Ekspedisi</th>
-                        <th className="p-2 text-left text-sm">Status</th>
-                        <th className="p-2 text-left text-sm">Total</th>
-                        <th className="p-2 text-left text-sm">Aksi</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Order ID</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Pembeli</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Platform</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Ekspedisi</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">
+                          <span className="inline-flex items-center gap-0.5">
+                            Tanggal
+                            <span className="inline-flex flex-col ml-0.5">
+                              <button
+                                type="button"
+                                onClick={() => { setSortOrder("asc"); fetchOrders("asc"); }}
+                                className={`p-0.5 rounded hover:bg-muted ${sortOrder === "asc" ? "text-foreground bg-muted/50" : "text-muted-foreground"}`}
+                                title="Terlama dulu"
+                                aria-label="Sortir terlama dulu"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setSortOrder("desc"); fetchOrders("desc"); }}
+                                className={`p-0.5 rounded hover:bg-muted -mt-0.5 ${sortOrder === "desc" ? "text-foreground bg-muted/50" : "text-muted-foreground"}`}
+                                title="Terbaru dulu"
+                                aria-label="Sortir terbaru dulu"
+                              >
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                          </span>
+                        </th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Status</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Total</th>
+                        <th className="p-2 text-left text-xs tablet:text-sm whitespace-nowrap">Aksi</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedOrders.map((order) => (
                       <tr key={order.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{order.order_id_marketplace}</td>
-                        <td className="p-2">{order.nama_pembeli}</td>
-                        <td className="p-2">{order.platform_penjualan}</td>
-                        <td className="p-2">{order.expedisi}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.order_id_marketplace}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.nama_pembeli}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.platform_penjualan}</td>
+                        <td className="p-2 text-xs tablet:text-sm">{order.expedisi}</td>
+                        <td className="p-2 text-xs tablet:text-sm whitespace-nowrap">{new Date(order.tanggal_pemesanan).toLocaleDateString("id-ID")}</td>
                         <td className="p-2">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status as OrderStatus)}`}>
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getStatusColor(order.status as OrderStatus)}`}>
                             {ORDER_STATUSES[order.status as keyof typeof ORDER_STATUSES] || order.status}
                           </span>
                         </td>
+                        <td className="p-2 text-xs tablet:text-sm whitespace-nowrap">Rp {Number(order.total_harga).toLocaleString("id-ID", { maximumFractionDigits: 0 })}</td>
                         <td className="p-2">
-                          Rp {order.total_harga.toLocaleString("id-ID")}
-                        </td>
-                        <td className="p-2">
-                          <div className="flex gap-2">
+                          <div className="flex gap-1 flex-wrap">
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => setSelectedOrder(order)}
+                              className="text-xs"
                             >
                               Detail
                             </Button>
@@ -574,8 +601,9 @@ export default function DashboardPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleEditOrder(order)}
+                              className="shrink-0"
                             >
-                              <Edit className="h-4 w-4" />
+                              <Edit className="h-3.5 w-3.5 tablet:h-4 tablet:w-4" />
                             </Button>
                           </div>
                         </td>
@@ -598,87 +626,23 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Users Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Daftar User</CardTitle>
-            <CardDescription>Kelola user sistem</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!Array.isArray(users) || users.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Belum ada user
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="p-2 text-left text-sm">Nama</th>
-                      <th className="p-2 text-left text-sm">Username</th>
-                      <th className="p-2 text-left text-sm">Role</th>
-                      <th className="p-2 text-left text-sm">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{user.nama}</td>
-                        <td className="p-2">{user.username}</td>
-                        <td className="p-2">{user.role}</td>
-                        <td className="p-2">
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingUser(user);
-                                setUserForm({
-                                  nama: user.nama,
-                                  username: user.username,
-                                  password: "",
-                                  role: user.role,
-                                });
-                                setShowUserForm(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteClick(user)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Order Detail Modal */}
         {selectedOrder && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Detail Order</CardTitle>
-                    <CardDescription>{selectedOrder.order_id_marketplace}</CardDescription>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 tablet:p-4 overflow-y-auto">
+            <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto my-auto">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg tablet:text-xl truncate">Detail Order</CardTitle>
+                    <CardDescription className="truncate">{selectedOrder.order_id_marketplace}</CardDescription>
                   </div>
-                  <Button variant="ghost" onClick={() => setSelectedOrder(null)}>
+                  <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(null)} className="shrink-0">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <CardContent className="space-y-4 pt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 tablet:grid-cols-3 gap-3 tablet:gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Nama Pembeli</p>
                     <p className="font-medium">{selectedOrder.nama_pembeli}</p>
@@ -692,25 +656,29 @@ export default function DashboardPage() {
                     <p className="font-medium">{ORDER_STATUSES[selectedOrder.status]}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Resi</p>
-                    <p className="font-medium">{selectedOrder.resi || "-"}</p>
-                  </div>
-                  <div>
                     <p className="text-sm text-muted-foreground">Total Harga</p>
                     <p className="font-medium">
-                      Rp {selectedOrder.total_harga.toLocaleString("id-ID")}
+                      Rp {Number(selectedOrder.total_harga).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Tanggal Pemesanan</p>
+                    <p className="font-medium">{new Date(selectedOrder.tanggal_pemesanan).toLocaleDateString("id-ID")}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Ekspedisi</p>
                     <p className="font-medium">{selectedOrder.expedisi}</p>
                   </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Resi</p>
+                    <p className="font-medium">{selectedOrder.resi || "-"}</p>
+                  </div>
                 </div>
 
                 {selectedOrder.order_items && selectedOrder.order_items.length > 0 && (
-                  <div>
+                  <div className="overflow-x-auto">
                     <p className="text-sm font-medium mb-2">Item Order</p>
-                    <div className="border rounded-md">
+                    <div className="border rounded-md min-w-[280px]">
                       <table className="w-full">
                         <thead className="bg-muted">
                           <tr>
@@ -726,10 +694,10 @@ export default function DashboardPage() {
                               <td className="p-2">{item.nama_produk}</td>
                               <td className="p-2">{item.qty}</td>
                               <td className="p-2">
-                                Rp {item.harga_satuan.toLocaleString("id-ID")}
+                                Rp {Number(item.harga_satuan).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}
                               </td>
                               <td className="p-2">
-                                Rp {(item.qty * item.harga_satuan).toLocaleString("id-ID")}
+                                Rp {Number(item.qty * item.harga_satuan).toLocaleString("id-ID", {maximumFractionDigits: 0, minimumFractionDigits: 0})}
                               </td>
                             </tr>
                           ))}
@@ -740,23 +708,15 @@ export default function DashboardPage() {
                 )}
 
                 <div>
-                  <p className="text-sm font-medium mb-2">QR Code</p>
-                  <div className="flex items-center gap-4">
-                    <QRCodeSVG value={getQrUrl(selectedOrder.qr_token)} size={200} />
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground mb-2">QR Token:</p>
+                  <p className="text-sm font-medium mb-2">Barcode</p>
+                  <div className="flex flex-col tablet:flex-row tablet:items-center gap-3 tablet:gap-4">
+                    <div className="bg-white p-2 rounded border inline-block w-fit">
+                      <Barcode value={selectedOrder.qr_token} format="CODE128" width={1} height={32} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground mb-2">Kode Barcode:</p>
                       <p className="text-sm font-mono break-all mb-4">{selectedOrder.qr_token}</p>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            window.open(getQrUrl(selectedOrder.qr_token), "_blank");
-                          }}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Buka Link QR
-                        </Button>
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
                           variant="default"
@@ -776,8 +736,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
+                <div className="flex flex-col tablet:flex-row tablet:justify-between tablet:items-start gap-4">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium mb-2">Update Status</p>
                     <div className="flex gap-2 flex-wrap">
                       {Object.entries(ORDER_STATUSES).map(([status, label]) => (
@@ -798,7 +758,7 @@ export default function DashboardPage() {
                     size="sm"
                     variant="outline"
                     onClick={() => handleEditOrder(selectedOrder)}
-                    className="ml-4"
+                    className="w-full tablet:w-auto shrink-0"
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Order

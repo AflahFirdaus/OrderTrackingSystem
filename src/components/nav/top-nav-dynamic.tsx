@@ -8,7 +8,8 @@ const titleMap: Record<string, string> = {
   "/": "Dashboard",
   "/orders": "Orders",
   "/users": "Users",
-  "/scan": "Scan QR",
+  "/scan": "Scan Barcode",
+  "/packing": "Packing",
 };
 
 export default function TopNavDynamic() {
@@ -16,8 +17,8 @@ export default function TopNavDynamic() {
   const title = titleMap[pathname] || "Dashboard";
 
   return (
-    <Container className="flex h-16 items-center justify-between border-b border-border">
-      <h1 className="text-2xl font-medium">{title}</h1>
+    <Container className="flex h-14 tablet:h-16 items-center justify-between gap-2 border-b border-border shrink-0">
+      <h1 className="text-lg tablet:text-2xl font-medium truncate min-w-0">{title}</h1>
       <ThemeToggle />
     </Container>
   );

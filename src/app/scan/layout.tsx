@@ -10,7 +10,7 @@ export default function ScanLayout({
     <div className="flex min-h-[100dvh]">
       <SideNav />
       <div className="flex-grow overflow-auto">
-        <TopNav title="Scan QR Code" />
+        <TopNav title="Scan Barcode" />
         <main>{children}</main>
       </div>
     </div>

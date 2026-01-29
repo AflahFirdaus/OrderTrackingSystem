@@ -51,38 +51,52 @@ export async function POST(request: Request) {
       },
     });
 
-    // Set cookie untuk session (simpan user_id dan role)
+    // Session cookie: tidak pakai maxAge agar otomatis logout saat tab/browser ditutup
     response.cookies.set("user_id", userData.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
     response.cookies.set("user_role", userData.role, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
     return response;
-  } catch (error: any) {
-    console.error("Login error:", error);
-    
-    // Check if it's an environment variable error
-    if (error.message?.includes("Missing Mysql")) {
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    const message = err.message || "Terjadi kesalahan saat login";
+    console.error("Login error:", message, err);
+
+    if (message.includes("Missing MySQL") || message.includes("MYSQL_")) {
       return NextResponse.json(
-        { 
-          error: error.message,
-          hint: "Buat file .env.local di root project dengan MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, dan MYSQL_DATABASE"
+        {
+          error: "Konfigurasi database belum lengkap",
+          details: message,
+          hint: "Pastikan .env berisi MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE",
         },
         { status: 500 }
       );
     }
-    
+
+    if (message.includes("ECONNREFUSED") || message.includes("connect")) {
+      return NextResponse.json(
+        {
+          error: "Tidak dapat terhubung ke database",
+          details: message,
+          hint: "Pastikan MySQL berjalan dan host/port di .env benar.",
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error.message || "Terjadi kesalahan saat login", details: error.toString() },
+      {
+        error: message,
+        details: err.toString(),
+      },
       { status: 500 }
     );
   }

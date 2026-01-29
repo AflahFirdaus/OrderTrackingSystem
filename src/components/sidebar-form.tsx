@@ -224,8 +224,9 @@ export function SidebarForm({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-border bg-background shadow-lg transition-transform duration-300 ease-in-out laptop:max-w-lg"
+          "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-border bg-background shadow-lg transition-transform duration-300 ease-in-out laptop:max-w-lg overflow-y-auto"
         )}
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0)" }}
       >
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-border p-4">

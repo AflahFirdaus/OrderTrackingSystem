@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { QRScanner } from "@/components/qr-scanner";
 import { AlertModal } from "@/components/alert-modal";
 import { ORDER_STATUSES } from "@/lib/constants";
 import type { OrderWithItems } from "@/types/database";
-import { Camera } from "lucide-react";
 
 export default function ScanPage() {
   const router = useRouter();
@@ -22,7 +20,6 @@ export default function ScanPage() {
   const [user, setUser] = useState<any>(null);
   const [canProcess, setCanProcess] = useState(false);
   const [nextStatus, setNextStatus] = useState<string | null>(null);
-  const [showScanner, setShowScanner] = useState(false);
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -67,59 +64,6 @@ export default function ScanPage() {
       setOrder(data.order);
       setCanProcess(false);
       setNextStatus(null);
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan");
-      // Show beautiful alert modal for specific gudang error
-      if (err.message?.includes("Orderan telah di proses gudang") || err.message?.includes("sudah pernah diproses") || err.message?.includes("DITERIMA_GUDANG") || err.message?.includes("PACKING") || err.message?.includes("DIKIRIM") || err.message?.includes("SELESAI")) {
-        setAlertModal({
-          isOpen: true,
-          title: "Orderan Telah Di Proses",
-          message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleScanSuccess = async (scannedToken: string) => {
-    setShowScanner(false);
-    setToken(scannedToken);
-    
-    // Auto scan setelah mendapatkan token dari kamera
-    setLoading(true);
-    setError("");
-    setSuccess("");
-    setWarning("");
-    setOrder(null);
-
-    try {
-      const response = await fetch(`/api/scan/${scannedToken}`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Gagal memproses scan");
-      }
-
-      setOrder(data.order);
-      setUser(data.user);
-      setCanProcess(data.canProcess);
-      setNextStatus(data.nextStatus);
-      
-      // Show warning if order already processed
-      if (data.warningMessage) {
-        setWarning(data.warningMessage);
-        // Show beautiful alert modal for gudang trying to scan already processed order
-        if (data.user?.role === "gudang" && data.order?.status !== "DIBUAT") {
-          if (data.order?.status === "DITERIMA_GUDANG" || data.order?.status === "PACKING" || data.order?.status === "DIKIRIM" || data.order?.status === "SELESAI" || data.order?.status === "DIBATALKAN") {
-            setAlertModal({
-              isOpen: true,
-              title: "Orderan Telah Di Proses",
-              message: "Orderan telah di proses gudang. Tidak dapat diproses ulang.",
-            });
-          }
-        }
-      }
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
       // Show beautiful alert modal for specific gudang error
@@ -193,17 +137,17 @@ export default function ScanPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Scan QR Code</h1>
+        <h1 className="text-3xl font-bold">Scan Barcode</h1>
         <p className="text-muted-foreground">
-          Scan QR Code order untuk melihat detail dan memproses
+          Scan barcode order (scanner fisik) atau ketik kode barcode untuk melihat detail dan memproses
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Input QR Token</CardTitle>
+          <CardTitle>Input Kode Barcode</CardTitle>
           <CardDescription>
-            Masukkan token QR Code atau scan QR Code order
+            Arahkan scanner barcode ke kolom ini lalu scan, atau ketik manual kode barcode order
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -226,23 +170,15 @@ export default function ScanPage() {
             <div className="flex gap-2">
               <Input
                 type="text"
-                placeholder="Masukkan QR Token atau scan QR Code"
+                placeholder="Kode barcode (scan atau ketik)"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 disabled={loading}
                 className="flex-1"
+                autoFocus
               />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowScanner(true)}
-                disabled={loading}
-                title="Buka Kamera untuk Scan QR Code"
-              >
-                <Camera className="h-4 w-4" />
-              </Button>
               <Button type="submit" disabled={loading || !token}>
-                {loading ? "Memproses..." : "Scan"}
+                {loading ? "Memproses..." : "Cari"}
               </Button>
             </div>
           </form>
@@ -355,13 +291,6 @@ export default function ScanPage() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {showScanner && (
-        <QRScanner
-          onScanSuccess={handleScanSuccess}
-          onClose={() => setShowScanner(false)}
-        />
       )}
 
       {/* Alert Modal for Gudang Processed Order */}

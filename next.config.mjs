@@ -12,7 +12,7 @@ const nextConfig = {
   },
   // Optimize for production
   reactStrictMode: true,
-  swcMinify: true,
+  // SWC minify sudah default di Next.js 12+, tidak perlu swcMinify
   // Ensure proper image optimization
   images: {
     formats: ['image/avif', 'image/webp'],

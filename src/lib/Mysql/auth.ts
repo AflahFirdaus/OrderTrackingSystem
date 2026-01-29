@@ -17,14 +17,22 @@ export async function requireUserId(): Promise<string> {
   return userId;
 }
 
+const LOGIN_PATH = "/login";
+
 export async function updateSession(request: NextRequest) {
   const userId = request.cookies.get("user_id")?.value;
-  const response = NextResponse.next();
+  const pathname = request.nextUrl.pathname;
 
-  // If no user_id cookie, allow request to continue (will be handled by page-level auth)
+  // Jika belum login, arahkan ke halaman login (kecuali sudah di /login)
   if (!userId) {
-    return response;
+    if (pathname === LOGIN_PATH) {
+      return NextResponse.next();
+    }
+    const loginUrl = new URL(LOGIN_PATH, request.url);
+    return NextResponse.redirect(loginUrl);
   }
+
+  const response = NextResponse.next();
 
   // Verify user exists in database
   try {
@@ -34,10 +42,10 @@ export async function updateSession(request: NextRequest) {
     );
 
     if (!user) {
-      // User doesn't exist, clear cookies
-      response.cookies.delete("user_id");
-      response.cookies.delete("user_role");
-      return response;
+      const redirect = NextResponse.redirect(new URL(LOGIN_PATH, request.url));
+      redirect.cookies.delete("user_id");
+      redirect.cookies.delete("user_role");
+      return redirect;
     }
 
     // Update user_role cookie if it doesn't match
@@ -47,14 +55,14 @@ export async function updateSession(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7, // 7 days
       });
     }
   } catch (error) {
-    // If database error, clear cookies
     console.error("Error verifying user in middleware:", error);
-    response.cookies.delete("user_id");
-    response.cookies.delete("user_role");
+    const redirect = NextResponse.redirect(new URL(LOGIN_PATH, request.url));
+    redirect.cookies.delete("user_id");
+    redirect.cookies.delete("user_role");
+    return redirect;
   }
 
   return response;
